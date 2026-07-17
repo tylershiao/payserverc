@@ -1,0 +1,29 @@
+{
+    "Module":{
+        "pay":[
+            {
+                "Id":"pay001",
+                "ProcessID":"development"
+            }
+        ]
+    },
+    "Mqtt":{
+        "WirteLoopChanNum": 10,
+        "ReadPackLoop": 1,
+        "ReadTimeout": 60,
+        "WriteTimeout": 60
+    },
+    "Rpc":{
+        "MaxCoroutine":10000,
+        "RpcExpired": 1,
+        "LogSuccess":false
+    },
+    "Log": {
+        "file":{
+              "daily":true,
+              "level":7,
+              "maxsize":1024000000,
+              "maxlines":10000000
+          }
+    }
+}

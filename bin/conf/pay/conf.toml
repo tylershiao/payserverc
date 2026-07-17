@@ -1,0 +1,22 @@
+[Pay]
+Addr=":8615"
+TLS=false
+CertFile=""
+KeyFile=""
+CallbackURL = "http://127.0.0.1"
+CheckLimit = 20
+SelectPayWay = true
+PayCheckTime = 2
+PayFailWeight = 20
+PaySuccessWeight = 50
+BaseSuccess = 10
+WithdrawCheckTime = 5
+WithdrawScanTime = 60
+QueryPayTime = 30
+QueryWithdrawTime = 60
+WithdrawRiskAudit = true
+BaseWithdrawSuccess = 80
+PayCheckCount = 10
+OrderRate = 10
+QueryRate = 20
+PaymentURL = "https://testpaypage.fly-pays.com/page/pay"

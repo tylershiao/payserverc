@@ -1,0 +1,22 @@
+ServerFlag = "a"
+[net]
+registry="127.0.0.1:8500" # consul 地址
+nats="nats://127.0.0.1:4222" # nats地址
+
+[redis]
+addr="127.0.0.1:6379"
+name=""
+passwd=""
+tls=false
+db=0
+cluster=false
+
+[es]
+urls=["http://127.0.0.1:9200"]
+sniff=false
+
+[mysql]
+dsn="root:123456@tcp(127.0.0.1:3306)/server"
+debug=true
+MaxIdleConns = 0
+ConnMaxLifetime = 0
