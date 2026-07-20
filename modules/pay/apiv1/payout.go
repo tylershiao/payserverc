@@ -18,28 +18,28 @@ import (
 )
 
 type PayOutCreateReq struct {
-	MID        int    `json:"MID" binding:"required"`
-	MOrderID   string `json:"MOrderID" binding:"required"`
-	Amount     int    `json:"Amount" binding:"required"`
-	IP         string `json:"IP" binding:"required"`
-	UserMobile string `json:"UserMobile" binding:"required"`
-	UserID     any    `json:"UserID"`
-	UserName   string `json:"UserName"`
-	UserEmail  string `json:"UserEmail"`
-	DeviceID   string `json:"DeviceID"`
-	Type       int    `json:"Type" binding:"required"` // 代付方式 1bank 2upi
-	Account    string `json:"Account" binding:"required"`
-	IFSC       string `json:"IFSC"`     // PayType为1时必填
-	BankName   string `json:"BankName"` // PayType为1时必填
-	NotifyURL  string `json:"NotifyURL" binding:"required"`
-	Extra      string `json:"Extra"`
-	Sign       string `json:"Sign" binding:"required"`
+	MerchantID         int    `json:"merchantId" binding:"required"`
+	MerchantOrderID    string `json:"merchantOrderId" binding:"required"`
+	OrderAmount        int    `json:"orderAmount" binding:"required"`
+	ClientIP           string `json:"clientIp" binding:"required"`
+	CustomerPhone      string `json:"customerPhone" binding:"required"`
+	CustomerID         any    `json:"customerId"`
+	CustomerName       string `json:"customerName"`
+	CustomerEmail      string `json:"customerEmail"`
+	DeviceFingerprint  string `json:"deviceFingerprint"`
+	PayoutMethod       int    `json:"payoutMethod" binding:"required"` // 代付方式 1bank 2upi
+	BeneficiaryAccount string `json:"beneficiaryAccount" binding:"required"`
+	IFSCCode           string `json:"ifscCode"`        // PayType为1时必填
+	BeneficiaryBank    string `json:"beneficiaryBank"` // PayType为1时必填
+	CallbackURL        string `json:"callbackUrl" binding:"required"`
+	Metadata           string `json:"metadata"`
+	Signature          string `json:"signature" binding:"required"`
 }
 
 type PayOutCreateResp struct {
-	MID      int    // 商户号
-	OrderID  string // 平台订单号
-	MOrderID string // 商户订单号
+	MerchantID      int    `json:"merchantId"`      // 商户号
+	PlatformOrderID string `json:"platformOrderId"` // 平台订单号
+	MerchantOrderID string `json:"merchantOrderId"` // 商户订单号
 }
 
 func PayOutCreate(c *gin.Context) {
@@ -51,73 +51,73 @@ func PayOutCreate(c *gin.Context) {
 	if !a.S(req) {
 		return
 	}
-	if !util.IsValidIndianLocalMobile(req.UserMobile) {
+	if !util.IsValidIndianLocalMobile(req.CustomerPhone) {
 		a.Code = app.CodeParam
 		a.Msg = "Invalid Mobile"
 		return
 	}
-	if !util.IsValidIP(req.IP) {
+	if !util.IsValidIP(req.ClientIP) {
 		a.Code = app.CodeParam
 		a.Msg = "Invalid IP"
 		return
 	}
-	if !util.IsValidHTTPURL(req.NotifyURL) {
+	if !util.IsValidHTTPURL(req.CallbackURL) {
 		a.Code = app.CodeParam
 		a.Msg = "Invalid NotifyURL"
 		return
 	}
-	if req.Type <= common.WithdrawTypeInvalid || req.Type >= common.WithdrawTypeAll {
+	if req.PayoutMethod <= common.WithdrawTypeInvalid || req.PayoutMethod >= common.WithdrawTypeAll {
 		a.Code = app.CodeParam
 		a.Msg = "Invalid PayType"
 		return
 	}
-	if req.Type == common.WithdrawTypeBank {
-		if req.BankName == "" {
+	if req.PayoutMethod == common.WithdrawTypeBank {
+		if req.BeneficiaryBank == "" {
 			a.Code = app.CodeParam
 			a.Msg = "BankName cannot be empty"
 			return
 		}
-		if req.IFSC == "" {
+		if req.IFSCCode == "" {
 			a.Code = app.CodeParam
 			a.Msg = "IFSC cannot be empty"
 			return
 		}
 	}
 
-	mer := call.GetConfigMerchatsByIDReal(req.MID)
+	mer := call.GetConfigMerchatsByIDReal(req.MerchantID)
 	if mer != nil {
 		a.Merchat = mer
 	}
-	if !a.CheckMerchat(req, req.MID, req.Sign, 3) {
+	if !a.CheckMerchat(req, req.MerchantID, req.Signature, 3) {
 		return
 	}
 	if len(a.Merchat.WithdrawRangeSub) == 2 {
 		min := int(a.Merchat.WithdrawRangeSub[0] * 100)
 		max := int(a.Merchat.WithdrawRangeSub[1] * 100)
-		if req.Amount < min {
+		if req.OrderAmount < min {
 			a.Code = app.CodeParam
 			a.Msg = fmt.Sprintf("The payment limit cannot be lower than %d", min)
 			return
 		}
-		if max > 0 && req.Amount > max {
+		if max > 0 && req.OrderAmount > max {
 			a.Code = app.CodeParam
 			a.Msg = fmt.Sprintf("The payment limit cannot be higher than %d", max)
 			return
 		}
 	}
-	data := &common.CommonPayData{Name: req.UserName, Mobile: req.UserMobile, Email: req.UserEmail, IP: req.IP, PayType: req.Type,
-		DeviceID: req.DeviceID, IFSC: req.IFSC, BankName: req.BankName, Account: req.Account}
+	data := &common.CommonPayData{Name: req.CustomerName, Mobile: req.CustomerPhone, Email: req.CustomerEmail, IP: req.ClientIP, PayType: req.PayoutMethod,
+		DeviceID: req.DeviceFingerprint, IFSC: req.IFSCCode, BankName: req.BeneficiaryBank, Account: req.BeneficiaryAccount}
 	if !a.Risk(data) {
 		return
 	}
-	one := &common.OrderWithdraw{MOrderID: req.MOrderID, MID: req.MID}
+	one := &common.OrderWithdraw{MOrderID: req.MerchantOrderID, MID: req.MerchantID}
 	db.Mysql().Get(one)
 	if one.ID > 0 {
 		a.Code = app.CodeDuplicateOrder
 		return
 	}
 	log.Debug("PayOutCreate:%+v", req)
-	amount := util.Decimal(float64(req.Amount)/100, 2)
+	amount := util.Decimal(float64(req.OrderAmount)/100, 2)
 	fee := a.Merchat.CallFee(2, amount)
 	total := amount + fee
 	if a.Merchat.Balance < total {
@@ -125,7 +125,7 @@ func PayOutCreate(c *gin.Context) {
 		return
 	}
 	orderID := call.NewOrderIDV2(common.PayOutPrefix)
-	riskAction := call.CheckWithdrawCardRisk(req.MID, orderID, req.MOrderID, req.Type, req.Account, req.IP, req.Amount)
+	riskAction := call.CheckWithdrawCardRisk(req.MerchantID, orderID, req.MerchantOrderID, req.PayoutMethod, req.BeneficiaryAccount, req.ClientIP, req.OrderAmount)
 	if riskAction == call.WithdrawCardRiskActionRejected {
 		a.Code = app.CodeRisk
 		return
@@ -150,19 +150,19 @@ func PayOutCreate(c *gin.Context) {
 	tmp, _ := json.Marshal(data)
 
 	status := common.StatusROrderWaitting
-	if req.MID == 10000 || riskAction == call.WithdrawCardRiskActionPendingReview { // 测试号或风控待审核
+	if req.MerchantID == 10000 || riskAction == call.WithdrawCardRiskActionPendingReview { // 测试号或风控待审核
 		status = common.StatusROrderCreate
 	}
 	order := &common.OrderWithdraw{
 		OrderID:     orderID,
-		MOrderID:    req.MOrderID,
-		MID:         req.MID,
+		MOrderID:    req.MerchantOrderID,
+		MID:         req.MerchantID,
 		Amount:      amount,
 		PayAccount:  tmp,
 		Status:      status,
-		UID:         util.AnyToString(req.UserID),
-		Extra:       req.Extra,
-		CallbackURL: req.NotifyURL,
+		UID:         util.AnyToString(req.CustomerID),
+		Extra:       req.Metadata,
+		CallbackURL: req.CallbackURL,
 		Fee:         fee,
 	}
 	err = tx.Create(order).Error
@@ -188,11 +188,11 @@ func PayOutCreate(c *gin.Context) {
 	}
 
 	a.Data = &PayOutCreateResp{
-		MID:      req.MID,
-		OrderID:  orderID,
-		MOrderID: req.MOrderID,
+		MerchantID:      req.MerchantID,
+		PlatformOrderID: orderID,
+		MerchantOrderID: req.MerchantOrderID,
 	}
-	if req.MID == 10000 { // 测试号
+	if req.MerchantID == 10000 { // 测试号
 		order.Status = common.StatusROrderFail
 		if rand.Intn(2) == 0 {
 			order.Status = common.StatusROrderFinish
@@ -205,17 +205,17 @@ func PayOutCreate(c *gin.Context) {
 }
 
 type PayOutQueryReq struct {
-	MID      int    `json:"MID" binding:"required"`
-	MOrderID string `json:"MOrderID" binding:"required"`
-	Sign     string `json:"Sign" binding:"required"`
+	MerchantID      int    `json:"merchantId" binding:"required"`
+	MerchantOrderID string `json:"merchantOrderId" binding:"required"`
+	Signature       string `json:"signature" binding:"required"`
 }
 
 type PayOutQueryResp struct {
-	MID      int    // 商户号
-	OrderID  string // 平台订单号
-	MOrderID string // 商户订单号
-	Amount   int64  // 订单金额
-	Status   int    // 订单状态
+	MerchantID      int    `json:"merchantId"`      // 商户号
+	PlatformOrderID string `json:"platformOrderId"` // 平台订单号
+	MerchantOrderID string `json:"merchantOrderId"` // 商户订单号
+	OrderAmount     int64  `json:"orderAmount"`     // 订单金额
+	OrderStatus     int    `json:"orderStatus"`     // 订单状态
 }
 
 func PayOutQuery(c *gin.Context) {
@@ -223,19 +223,19 @@ func PayOutQuery(c *gin.Context) {
 	defer func() {
 		a.Response()
 	}()
-	req := new(PayInQueryReq)
+	req := new(PayOutQueryReq)
 	if !a.S(req) {
 		return
 	}
-	mer := &common.Merchats{MID: req.MID}
+	mer := &common.Merchats{MID: req.MerchantID}
 	db.Mysql().Get(mer)
 	if mer.ID > 0 {
 		a.Merchat = mer
 	}
-	if !a.CheckMerchat(req, req.MID, req.Sign, 4) {
+	if !a.CheckMerchat(req, req.MerchantID, req.Signature, 4) {
 		return
 	}
-	order := &common.OrderWithdraw{MOrderID: req.MOrderID, MID: req.MID}
+	order := &common.OrderWithdraw{MOrderID: req.MerchantOrderID, MID: req.MerchantID}
 	err := db.Mysql().Get(order)
 	if order.ID == 0 {
 		a.Code = app.CodeOrderNotExist
@@ -246,10 +246,10 @@ func PayOutQuery(c *gin.Context) {
 		return
 	}
 	a.Data = &PayOutQueryResp{
-		MID:      req.MID,
-		OrderID:  order.OrderID,
-		MOrderID: req.MOrderID,
-		Amount:   int64(order.Amount * 100),
-		Status:   order.Status,
+		MerchantID:      req.MerchantID,
+		PlatformOrderID: order.OrderID,
+		MerchantOrderID: req.MerchantOrderID,
+		OrderAmount:     int64(order.Amount * 100),
+		OrderStatus:     order.Status,
 	}
 }

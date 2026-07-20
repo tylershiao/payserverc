@@ -1,0 +1,1550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <title>FlyPay印度支付系统 API V1 - 商户对接文档</title>
+  <style>
+    :root {
+      --ink: #17213a;
+      --muted: #6d7485;
+      --paper: #fbfaf7;
+      --panel: #ffffff;
+      --line: #e7e4dc;
+      --navy: #17285f;
+      --blue: #4d63e8;
+      --blue-soft: #eef0ff;
+      --coral: #ff765f;
+      --mint: #b9f5df;
+      --code: #121a2f;
+      --sidebar: 272px;
+      --shadow: 0 18px 60px rgba(34, 42, 70, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 92px; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background-color: var(--paper);
+      background-image: radial-gradient(#d9d5cb 0.7px, transparent 0.7px);
+      background-size: 22px 22px;
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, a { font: inherit; }
+    a { color: inherit; }
+
+    .docs-layout { min-height: 100vh; }
+
+    .sidebar {
+      position: fixed;
+      z-index: 20;
+      inset: 0 auto 0 0;
+      width: var(--sidebar);
+      display: flex;
+      flex-direction: column;
+      padding: 32px 24px 24px;
+      color: #fff;
+      background: var(--navy);
+      overflow-y: auto;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 42px;
+      font-size: 18px;
+      font-weight: 750;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-mark {
+      position: relative;
+      width: 38px;
+      height: 38px;
+      flex: 0 0 auto;
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 50%;
+      background: var(--coral);
+      box-shadow: inset -8px -8px 0 rgba(0,0,0,.08);
+    }
+
+    .brand-mark::before,
+    .brand-mark::after {
+      content: "";
+      position: absolute;
+      background: #fff;
+      border-radius: 4px;
+      transform: rotate(-18deg);
+    }
+
+    .brand-mark::before { width: 7px; height: 21px; left: 11px; top: 8px; }
+    .brand-mark::after { width: 7px; height: 13px; left: 21px; top: 8px; }
+
+    .nav-label {
+      margin: 0 10px 10px;
+      color: rgba(255,255,255,.48);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .side-nav { display: grid; gap: 4px; }
+    .side-nav a {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 42px;
+      padding: 9px 11px;
+      color: rgba(255,255,255,.66);
+      border-radius: 9px;
+      text-decoration: none;
+      font-size: 14px;
+      transition: color .2s ease, background .2s ease, transform .2s ease;
+    }
+
+    .side-nav a::before {
+      content: attr(data-index);
+      width: 21px;
+      color: rgba(255,255,255,.34);
+      font: 600 11px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    .side-nav a:hover { color: #fff; transform: translateX(2px); }
+    .side-nav a.active { color: #fff; background: rgba(255,255,255,.11); }
+    .side-nav a.active::before { color: var(--mint); }
+
+    .sidebar-card {
+      margin-top: auto;
+      padding: 17px;
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 12px;
+      background: rgba(255,255,255,.06);
+    }
+
+    .sidebar-card strong { display: block; margin-bottom: 3px; font-size: 13px; }
+    .sidebar-card span { color: rgba(255,255,255,.52); font-size: 12px; }
+    .sidebar-card i {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      margin-right: 7px;
+      border-radius: 50%;
+      background: #5be6ad;
+      box-shadow: 0 0 0 4px rgba(91,230,173,.12);
+    }
+
+    .content-shell { margin-left: var(--sidebar); min-width: 0; }
+
+    .topbar {
+      position: sticky;
+      z-index: 15;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 66px;
+      padding: 0 clamp(24px, 5vw, 72px);
+      border-bottom: 1px solid rgba(220,216,206,.8);
+      background: rgba(251,250,247,.88);
+      backdrop-filter: blur(16px);
+    }
+
+    .topbar-title { color: var(--muted); font-size: 13px; }
+    .topbar-title b { color: var(--ink); }
+    .topbar-actions { display: flex; align-items: center; gap: 12px; }
+
+    .version-pill {
+      padding: 6px 11px;
+      border: 1px solid var(--line);
+      border-radius: 99px;
+      background: #fff;
+      color: var(--navy);
+      font: 700 12px/1.2 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    .menu-button {
+      display: none;
+      width: 38px;
+      height: 38px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .menu-button svg { width: 100%; height: 100%; }
+    .scroll-progress {
+      position: absolute;
+      left: 0;
+      bottom: -1px;
+      width: 0;
+      height: 2px;
+      background: var(--coral);
+    }
+
+    main {
+      width: min(1040px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 62px 0 90px;
+    }
+
+    .hero {
+      position: relative;
+      min-height: 372px;
+      display: grid;
+      align-items: end;
+      grid-template-columns: 1fr 240px;
+      gap: 32px;
+      padding: clamp(32px, 6vw, 66px);
+      margin-bottom: 44px;
+      color: #fff;
+      border-radius: 2px 40px 2px 2px;
+      background: var(--blue);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .hero::before {
+      content: "";
+      position: absolute;
+      width: 340px;
+      height: 340px;
+      top: -182px;
+      right: -72px;
+      border: 72px solid rgba(255,255,255,.12);
+      border-radius: 50%;
+    }
+
+    .hero::after {
+      content: "API";
+      position: absolute;
+      right: 35px;
+      bottom: -59px;
+      color: rgba(255,255,255,.07);
+      font: 900 176px/1 Inter, system-ui, sans-serif;
+      letter-spacing: -.08em;
+    }
+
+    .hero-copy, .hero-meta { position: relative; z-index: 1; }
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin: 0 0 20px;
+      color: #dfe3ff;
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before { content: ""; width: 30px; height: 2px; background: var(--mint); }
+
+    h1 {
+      max-width: 650px;
+      margin: 0;
+      color: #fff;
+      font-size: clamp(36px, 5.2vw, 66px);
+      line-height: 1.08;
+      letter-spacing: -.055em;
+    }
+
+    h1 span { display: block; color: #ccd3ff; font-size: .43em; letter-spacing: -.02em; margin-top: 17px; }
+    .hero-meta { align-self: end; border-left: 1px solid rgba(255,255,255,.22); padding-left: 24px; }
+    .hero-meta p { margin: 0; color: rgba(255,255,255,.68); font-size: 13px; }
+    .hero-meta strong { display: block; margin: 4px 0 16px; color: #fff; font-size: 16px; }
+
+    .section {
+      position: relative;
+      margin: 22px 0;
+      padding: clamp(25px, 4.5vw, 48px);
+      border: 1px solid var(--line);
+      border-radius: 2px 22px 22px 22px;
+      background: var(--panel);
+      box-shadow: 0 10px 40px rgba(42, 48, 70, .045);
+    }
+
+    .section::before {
+      content: attr(data-section);
+      position: absolute;
+      top: 0;
+      left: 0;
+      padding: 5px 11px;
+      color: #fff;
+      background: var(--navy);
+      font: 700 10px/1.3 ui-monospace, SFMono-Regular, Consolas, monospace;
+      letter-spacing: .08em;
+    }
+
+    h2 {
+      margin: 12px 0 28px;
+      color: var(--ink);
+      font-size: clamp(23px, 3vw, 32px);
+      line-height: 1.25;
+      letter-spacing: -.035em;
+    }
+
+    h3 {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 42px 0 18px;
+      padding-top: 24px;
+      border-top: 1px solid var(--line);
+      color: var(--navy);
+      font-size: 18px;
+      line-height: 1.4;
+    }
+
+    h2 + h3 { margin-top: 0; }
+    h4 {
+      margin: 28px 0 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+    }
+
+    p { color: #4e5668; }
+    p b { color: var(--ink); }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 9px;
+      color: #9d311f;
+      border: 1px solid #ffc8be;
+      border-radius: 99px;
+      background: #fff0ed;
+      font: 800 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+      letter-spacing: .08em;
+    }
+
+    .table-scroll {
+      width: 100%;
+      margin: 18px 0 28px;
+      border: 1px solid var(--line);
+      overflow-x: auto;
+    }
+
+    table { width: 100%; min-width: 580px; border-collapse: collapse; background: #fff; }
+    th {
+      padding: 12px 16px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--line);
+      background: #f7f6f2;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-align: left;
+      text-transform: uppercase;
+    }
+
+    td {
+      padding: 13px 16px;
+      color: #51586a;
+      border-bottom: 1px solid #efede7;
+      font-size: 13px;
+      vertical-align: top;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:hover td { background: #fafaff; }
+    td:first-child { color: #34407d; font: 650 12px/1.7 ui-monospace, SFMono-Regular, Consolas, monospace; }
+
+    .code-wrap { position: relative; margin: 16px 0 28px; }
+    pre {
+      min-height: 58px;
+      margin: 0;
+      padding: 25px 66px 25px 24px;
+      color: #d9e2ff;
+      border-left: 4px solid var(--coral);
+      background: var(--code);
+      overflow-x: auto;
+      font: 500 12.5px/1.75 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      tab-size: 2;
+      white-space: pre;
+    }
+
+    .copy-button {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      padding: 8px;
+      color: #9da8c7;
+      border: 1px solid #303b58;
+      border-radius: 7px;
+      background: #1b2540;
+      cursor: pointer;
+      transition: color .2s ease, border-color .2s ease, background .2s ease;
+    }
+
+    .copy-button:hover, .copy-button.copied { color: #fff; border-color: #6d7cd6; background: #27345a; }
+    .copy-button svg { width: 100%; height: 100%; }
+
+    .note, .warn {
+      position: relative;
+      margin: 22px 0;
+      padding: 19px 22px 19px 52px;
+      color: #40535c;
+      border: 1px solid #cce9df;
+      background: #effbf6;
+      font-size: 13px;
+    }
+
+    .note::before, .warn::before {
+      content: "i";
+      position: absolute;
+      top: 19px;
+      left: 20px;
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 20px;
+      color: #fff;
+      border-radius: 50%;
+      background: #31aa7f;
+      font: 800 12px/1 Georgia, serif;
+    }
+
+    .warn { color: #714134; border-color: #ffd6cd; background: #fff3f0; }
+    .warn::before { content: "!"; background: var(--coral); font-family: inherit; }
+    main > .warn { margin: 22px 0; box-shadow: var(--shadow); }
+
+    .page-footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 24px 3px 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .overlay { display: none; }
+    ::selection { color: #fff; background: var(--blue); }
+    ::-webkit-scrollbar { width: 9px; height: 9px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 99px; background: #c9c6bd; background-clip: padding-box; }
+
+    @media (max-width: 920px) {
+      :root { --sidebar: 250px; }
+      .hero { grid-template-columns: 1fr; }
+      .hero-meta { display: none; }
+    }
+
+    @media (max-width: 760px) {
+      html { scroll-padding-top: 78px; }
+      .sidebar {
+        width: min(292px, 86vw);
+        transform: translateX(-102%);
+        transition: transform .25s ease;
+        box-shadow: 20px 0 50px rgba(10,17,43,.2);
+      }
+
+      body.menu-open { overflow: hidden; }
+      body.menu-open .sidebar { transform: translateX(0); }
+      .overlay { position: fixed; z-index: 19; inset: 0; background: rgba(18,26,47,.4); backdrop-filter: blur(2px); }
+      body.menu-open .overlay { display: block; }
+      .content-shell { margin-left: 0; }
+      .topbar { height: 60px; padding: 0 18px; }
+      .menu-button { display: block; }
+      main { width: min(100% - 28px, 680px); padding: 30px 0 60px; }
+      .hero { min-height: 330px; padding: 30px 24px; margin-bottom: 26px; border-radius: 2px 28px 2px 2px; }
+      h1 { font-size: clamp(36px, 12vw, 52px); }
+      .section { padding: 28px 20px; border-radius: 2px 16px 16px 16px; }
+      pre { padding: 22px 60px 22px 18px; font-size: 11.5px; }
+      .note, .warn { padding: 17px 17px 17px 47px; }
+      .note::before, .warn::before { top: 17px; left: 16px; }
+      .page-footer { display: block; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="docs-layout">
+    <aside class="sidebar" aria-label="文档章节导航">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>FlyPay Docs</span></div>
+      <p class="nav-label">Documentation</p>
+      <nav class="side-nav">
+        <a href="#basic" data-index="01">基本信息</a>
+        <a href="#response" data-index="02">返回结构</a>
+        <a href="#errors" data-index="03">错误码</a>
+        <a href="#signature" data-index="04">签名规则</a>
+        <a href="#collection" data-index="05">代收接口</a>
+        <a href="#payout" data-index="06">代付接口</a>
+        <a href="#balance" data-index="07">余额查询</a>
+        <a href="#callback" data-index="08">回调说明</a>
+        <a href="#status" data-index="09">订单状态</a>
+      </nav>
+      <div class="sidebar-card">
+        <strong><i></i>API 服务正常</strong>
+        <span>India Payment · v1</span>
+      </div>
+    </aside>
+
+    <div class="overlay" aria-hidden="true"></div>
+
+    <div class="content-shell">
+      <header class="topbar">
+        <button class="menu-button" type="button" aria-label="打开章节导航" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div class="topbar-title"><b>开发者中心</b> / 商户接入</div>
+        <div class="topbar-actions"><span class="version-pill">API v1</span></div>
+        <div class="scroll-progress" aria-hidden="true"></div>
+      </header>
+
+      <main>
+        <header class="hero" id="overview">
+          <div class="hero-copy">
+            <p class="eyebrow">Merchant Integration Guide</p>
+            <h1>支付，一次接入<span>FlyPay 印度支付系统 · 商户标准接口文档</span></h1>
+          </div>
+          <div class="hero-meta">
+            <p>请求协议</p><strong>HTTPS / POST</strong>
+            <p>数据格式</p><strong>JSON</strong>
+            <p>签名方式</p><strong>MD5</strong>
+          </div>
+        </header>
+
+  <div class="section">
+    <h2>一、基本信息</h2>
+
+    <p><b>接口版本：</b> v1</p>
+    <p><b>请求方式：</b> POST</p>
+    <p><b>数据格式：</b> JSON</p>
+    <p><b>接口前缀：</b></p>
+
+    <pre>/api/in/v1</pre>
+  </div>
+
+  <div class="section">
+    <h2>二、统一返回结构</h2>
+
+    <pre>
+{
+  "code": 0,
+  "msg": "Success",
+  "data": {}
+}
+</pre>
+
+    <table>
+      <tr>
+        <th>字段</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>code</td>
+        <td>返回码，0 表示成功</td>
+      </tr>
+      <tr>
+        <td>msg</td>
+        <td>返回信息</td>
+      </tr>
+      <tr>
+        <td>data</td>
+        <td>业务数据</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>三、错误码说明</h2>
+
+    <div class="note">
+      <b>编码规则：</b>41xxx 表示请求校验错误，42xxx 表示商户错误，43xxx 表示订单错误，
+      44xxx 表示风控错误，45xxx 表示支付通道错误，50xxx 表示平台服务错误。
+    </div>
+
+    <table>
+      <tr>
+        <th>code</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>0</td>
+        <td>成功</td>
+      </tr>
+      <tr>
+        <td>41001</td>
+        <td>请求参数错误</td>
+      </tr>
+      <tr>
+        <td>41002</td>
+        <td>签名校验失败</td>
+      </tr>
+      <tr>
+        <td>41003</td>
+        <td>请求 IP 不在商户白名单</td>
+      </tr>
+      <tr>
+        <td>41029</td>
+        <td>请求过于频繁</td>
+      </tr>
+      <tr>
+        <td>42001</td>
+        <td>商户不存在</td>
+      </tr>
+      <tr>
+        <td>42002</td>
+        <td>商户服务不可用或对应业务已关闭</td>
+      </tr>
+      <tr>
+        <td>42003</td>
+        <td>商户账户余额不足</td>
+      </tr>
+      <tr>
+        <td>43001</td>
+        <td>订单不存在</td>
+      </tr>
+      <tr>
+        <td>43002</td>
+        <td>商户订单号已存在</td>
+      </tr>
+      <tr>
+        <td>44001</td>
+        <td>交易被风控拒绝</td>
+      </tr>
+      <tr>
+        <td>45001</td>
+        <td>当前无可用支付通道</td>
+      </tr>
+      <tr>
+        <td>50001</td>
+        <td>平台内部错误</td>
+      </tr>
+      <tr>
+        <td>50002</td>
+        <td>平台维护中，服务暂不可用</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>四、签名规则</h2>
+
+    <div class="note">
+      <b>签名算法：</b> MD5
+      <br />参数按字段名 ASCII 升序排序
+      <br />空值参数不参与签名
+      <br />signature 字段不参与签名
+      <br />拼接商户密钥 key
+      <br />MD5运算上一步得到的字符串并大写
+    </div>
+
+    <pre>
+callbackUrl=https://merchant.example.com/callback&clientIp=203.0.113.10&customerPhone=9876543210&merchantId=1001&merchantOrderId=xxx&orderAmount=10000&key=YOUR_KEY
+MD5 → 大写
+</pre>
+  </div>
+
+  <div class="section">
+    <h2>五、代收接口（收款）</h2>
+
+    <h3>1️⃣ 创建代收订单 <span class="badge">POST</span></h3>
+    <pre>/api/in/v1/ds/ld</pre>
+
+    <table>
+      <tr>
+        <th>字段</th>
+        <th>类型</th>
+        <th>必填</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>merchantId</td>
+        <td>int</td>
+        <td>是</td>
+        <td>商户号</td>
+      </tr>
+      <tr>
+        <td>merchantOrderId</td>
+        <td>string</td>
+        <td>是</td>
+        <td>商户订单号（唯一）</td>
+      </tr>
+      <tr>
+        <td>orderAmount</td>
+        <td>int</td>
+        <td>是</td>
+        <td>支付金额（单位：分）</td>
+      </tr>
+      <tr>
+        <td>clientIp</td>
+        <td>string</td>
+        <td>是</td>
+        <td>用户的真实IP</td>
+      </tr>
+      <tr>
+        <td>callbackUrl</td>
+        <td>string</td>
+        <td>是</td>
+        <td>支付结果通知地址</td>
+      </tr>
+      <tr>
+        <td>signature</td>
+        <td>string</td>
+        <td>是</td>
+        <td>签名</td>
+      </tr>
+      <tr>
+        <td>customerId</td>
+        <td>string</td>
+        <td>否</td>
+        <td>商户用户ID</td>
+      </tr>
+      <tr>
+        <td>customerName</td>
+        <td>string</td>
+        <td>否</td>
+        <td>用户姓名</td>
+      </tr>
+      <tr>
+        <td>customerPhone</td>
+        <td>string</td>
+        <td>是</td>
+        <td>印度本地手机号（强烈建议）</td>
+      </tr>
+      <tr>
+        <td>customerEmail</td>
+        <td>string</td>
+        <td>否</td>
+        <td>邮箱</td>
+      </tr>
+      <tr>
+        <td>deviceFingerprint</td>
+        <td>string</td>
+        <td>否</td>
+        <td>设备ID</td>
+      </tr>
+      <tr>
+        <td>metadata</td>
+        <td>string</td>
+        <td>否</td>
+        <td>透传参数</td>
+      </tr>
+    </table>
+
+    <h4>返回参数</h4>
+    <table>
+      <tr>
+        <th>字段</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>merchantId</td>
+        <td>商户号</td>
+      </tr>
+      <tr>
+        <td>platformOrderId</td>
+        <td>平台订单号</td>
+      </tr>
+      <tr>
+        <td>merchantOrderId</td>
+        <td>商户订单号</td>
+      </tr>
+      <tr>
+        <td>checkoutUrl</td>
+        <td>支付链接</td>
+      </tr>
+    </table>
+    <h4>返回示例</h4>
+    <pre>
+{
+  "code": 0,
+  "msg": "Success",
+  "data": {
+    "merchantId": 10000,
+    "platformOrderId": "PO01293091823",
+    "merchantOrderId": "MO192834091287491",
+    "checkoutUrl": "https://pay.example.com?orderid=PO129417890257"
+  }
+}
+</pre>
+
+    <h3>2️⃣ 代收订单查询 <span class="badge">POST</span></h3>
+    <pre>/api/in/v1/ds/cd</pre>
+
+    <table>
+      <tr>
+        <th>字段</th>
+        <th>类型</th>
+        <th>必填</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>merchantId</td>
+        <td>int</td>
+        <td>是</td>
+        <td>商户号</td>
+      </tr>
+      <tr>
+        <td>merchantOrderId</td>
+        <td>string</td>
+        <td>是</td>
+        <td>商户订单号</td>
+      </tr>
+      <tr>
+        <td>signature</td>
+        <td>string</td>
+        <td>是</td>
+        <td>签名</td>
+      </tr>
+    </table>
+
+    <h4>请求示例</h4>
+    <pre>
+{
+  "merchantId": 10000,
+  "merchantOrderId": "MO09123182587",
+  "signature": "AIUTIUJT993"
+}
+</pre>
+
+    <h4>返回参数</h4>
+    <table>
+      <tr>
+        <th>字段</th>
+        <th>类型</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>merchantId</td>
+        <td>int</td>
+        <td>商户号</td>
+      </tr>
+      <tr>
+        <td>platformOrderId</td>
+        <td>string</td>
+        <td>平台订单号</td>
+      </tr>
+      <tr>
+        <td>merchantOrderId</td>
+        <td>string</td>
+        <td>商户订单号</td>
+      </tr>
+      <tr>
+        <td>orderAmount</td>
+        <td>int</td>
+        <td>订单金额（分）</td>
+      </tr>
+      <tr>
+        <td>orderStatus</td>
+        <td>int</td>
+        <td>订单状态</td>
+      </tr>
+    </table>
+
+    <h4>返回示例</h4>
+    <pre>
+{
+  "code": 0,
+  "msg": "Success",
+  "data": {
+    "merchantId": 10000,
+    "platformOrderId": "PO120938123",
+    "merchantOrderId": "MO12515215",
+    "orderAmount": 10000,
+    "orderStatus": 3
+  }
+}
+</pre>
+
+  </div>
+
+  <div class="section">
+    <h2>六、代付接口（出款）</h2>
+
+    <h3>1️⃣ 创建代付订单 <span class="badge">POST</span></h3>
+    <pre>/api/in/v1/df/ld</pre>
+
+    <table>
+      <tr>
+        <th>字段</th>
+        <th>类型</th>
+        <th>必填</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>merchantId</td>
+        <td>int</td>
+        <td>是</td>
+        <td>商户号</td>
+      </tr>
+      <tr>
+        <td>merchantOrderId</td>
+        <td>string</td>
+        <td>是</td>
+        <td>商户订单号（唯一）</td>
+      </tr>
+      <tr>
+        <td>orderAmount</td>
+        <td>int</td>
+        <td>是</td>
+        <td>金额（单位：分）</td>
+      </tr>
+      <tr>
+        <td>clientIp</td>
+        <td>string</td>
+        <td>是</td>
+        <td>发起请求的客户端真实 IP</td>
+      </tr>
+      <tr>
+        <td>customerName</td>
+        <td>string</td>
+        <td>否</td>
+        <td>收款人姓名</td>
+      </tr>
+      <tr>
+        <td>customerPhone</td>
+        <td>string</td>
+        <td>是</td>
+        <td>印度本地手机号（强烈建议）</td>
+      </tr>
+      <tr>
+        <td>customerEmail</td>
+        <td>string</td>
+        <td>否</td>
+        <td>邮箱地址，格式需正确</td>
+      </tr>
+      <tr>
+        <td>payoutMethod</td>
+        <td>int</td>
+        <td>是</td>
+        <td>代付方式：1=银行卡，2=UPI</td>
+      </tr>
+      <tr>
+        <td>beneficiaryAccount</td>
+        <td>string</td>
+        <td>是</td>
+        <td>收款账号</td>
+      </tr>
+      <tr>
+        <td>ifscCode</td>
+        <td>string</td>
+        <td>条件必填</td>
+        <td>银行支付必填，IFSC码</td>
+      </tr>
+      <tr>
+        <td>beneficiaryBank</td>
+        <td>string</td>
+        <td>条件必填</td>
+        <td>银行支付必填，银行名称</td>
+      </tr>
+      <tr>
+        <td>callbackUrl</td>
+        <td>string</td>
+        <td>是</td>
+        <td>支付结果通知地址</td>
+      </tr>
+      <tr>
+        <td>signature</td>
+        <td>string</td>
+        <td>是</td>
+        <td>签名，MD5，规则同代收</td>
+      </tr>
+      <tr>
+        <td>customerId</td>
+        <td>string</td>
+        <td>否</td>
+        <td>商户用户 ID，可选</td>
+      </tr>
+      <tr>
+        <td>deviceFingerprint</td>
+        <td>string</td>
+        <td>否</td>
+        <td>设备 ID，可选</td>
+      </tr>
+      <tr>
+        <td>metadata</td>
+        <td>string</td>
+        <td>否</td>
+        <td>透传参数，可选</td>
+      </tr>
+    </table>
+
+    <h4>请求示例</h4>
+    <pre>
+{
+  "merchantId": 10000,
+  "merchantOrderId": "qweoi1011",
+  "orderAmount": 10000,
+  "clientIp": "123.123.123.123",
+  "customerName": "john",
+  "customerPhone": "9876543210",
+  "customerEmail": "john@gmail.com",
+  "payoutMethod": 1,
+  "beneficiaryAccount": "1234567890",
+  "ifscCode": "HDFC0001234",
+  "beneficiaryBank": "HDFC Bank",
+  "callbackUrl": "https://www.example.com",
+  "signature": "ASJ654564SDD",
+  "customerId": "user123",
+  "deviceFingerprint": "aslkdjajilsd",
+  "metadata": "po"
+}
+</pre>
+
+    <h4>返回参数</h4>
+    <table>
+      <tr>
+        <th>字段</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>merchantId</td>
+        <td>商户号</td>
+      </tr>
+      <tr>
+        <td>platformOrderId</td>
+        <td>平台订单号</td>
+      </tr>
+      <tr>
+        <td>merchantOrderId</td>
+        <td>商户订单号</td>
+      </tr>
+    </table>
+    <h4>返回示例</h4>
+    <pre>
+{
+  "code": 0,
+  "msg": "Success",
+  "data": {
+    "merchantId": 10000,
+    "platformOrderId": "PO12093812309123",
+    "merchantOrderId": "MO1293810928309"
+  }
+}
+</pre>
+
+    <h3>2️⃣ 代付订单查询 <span class="badge">POST</span></h3>
+    <pre>/api/in/v1/df/cd</pre>
+
+    <table>
+      <tr>
+        <th>字段</th>
+        <th>类型</th>
+        <th>必填</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>merchantId</td>
+        <td>int</td>
+        <td>是</td>
+        <td>商户号</td>
+      </tr>
+      <tr>
+        <td>merchantOrderId</td>
+        <td>string</td>
+        <td>是</td>
+        <td>商户订单号</td>
+      </tr>
+      <tr>
+        <td>signature</td>
+        <td>string</td>
+        <td>是</td>
+        <td>签名</td>
+      </tr>
+    </table>
+
+    <h4>请求示例</h4>
+    <pre>
+{
+  "merchantId": 10000,
+  "merchantOrderId": "PO12398189025419802",
+  "signature": "KLASJDLKJ9891823"
+}
+</pre>
+
+    <h4>返回参数</h4>
+    <table>
+      <tr>
+        <th>字段</th>
+        <th>类型</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>merchantId</td>
+        <td>int</td>
+        <td>商户号</td>
+      </tr>
+      <tr>
+        <td>platformOrderId</td>
+        <td>string</td>
+        <td>平台订单号</td>
+      </tr>
+      <tr>
+        <td>merchantOrderId</td>
+        <td>string</td>
+        <td>商户订单号</td>
+      </tr>
+      <tr>
+        <td>orderAmount</td>
+        <td>int</td>
+        <td>订单金额（分）</td>
+      </tr>
+      <tr>
+        <td>orderStatus</td>
+        <td>int</td>
+        <td>订单状态</td>
+      </tr>
+    </table>
+
+    <h4>返回示例</h4>
+    <pre>
+{
+  "code": 0,
+  "msg": "Success",
+  "data": {
+    "merchantId": 10000,
+    "platformOrderId": "PO1209310928309128",
+    "merchantOrderId": "MO1293810928309",
+    "orderAmount": 10000,
+    "orderStatus": 2
+  }
+}
+</pre>
+
+  </div>
+
+  <div class="section">
+    <h2>七、余额查询</h2>
+    <pre>/api/in/v1/sh/ye</pre>
+    <table>
+      <tr>
+        <th>字段</th>
+        <th>类型</th>
+        <th>必填</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>merchantId</td>
+        <td>int</td>
+        <td>是</td>
+        <td>商户号</td>
+      </tr>
+      <tr>
+        <td>signature</td>
+        <td>string</td>
+        <td>是</td>
+        <td>签名，MD5签名规则同代收代付</td>
+      </tr>
+    </table>
+
+    <h4>请求示例</h4>
+    <pre>
+{
+  "merchantId": 1001,
+  "signature": "SLKJLKSFJ1293123"
+}
+</pre>
+
+    <h4>返回参数</h4>
+    <table>
+      <tr>
+        <th>字段</th>
+        <th>类型</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>merchantId</td>
+        <td>int</td>
+        <td>商户号</td>
+      </tr>
+      <tr>
+        <td>availableFunds</td>
+        <td>int</td>
+        <td>可用余额（单位：分）</td>
+      </tr>
+      <tr>
+        <td>pendingFunds</td>
+        <td>int</td>
+        <td>待结算余额（单位：分）</td>
+      </tr>
+      <tr>
+        <td>lockedFunds</td>
+        <td>int</td>
+        <td>冻结金额（单位：分）</td>
+      </tr>
+    </table>
+
+    <h4>返回示例</h4>
+    <pre>
+{
+  "code": 0,
+  "msg": "Success",
+  "data": {
+    "merchantId": 1001,
+    "availableFunds": 100000,
+    "pendingFunds": 100000,
+    "lockedFunds": 10000
+  }
+}
+</pre>
+
+    <div class="note">
+      <b>说明：</b><br />
+      - 所有金额单位均为 <b>分</b>，商户可自行换算为元/卢比。<br />
+      - 可用余额 = 可直接使用的资金<br />
+      - 待结算余额 = 已到账但未结算资金<br />
+      - 冻结金额 = 风控/异常冻结资金
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>八、回调说明</h2>
+
+    <h3>1️⃣ 代收回调（Pay Callback）</h3>
+    <pre>POST 创建订单时传入的 callbackUrl</pre>
+
+    <table>
+      <tr>
+        <th>字段</th>
+        <th>类型</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>merchantId</td>
+        <td>int</td>
+        <td>商户号</td>
+      </tr>
+      <tr>
+        <td>platformOrderId</td>
+        <td>string</td>
+        <td>平台订单号</td>
+      </tr>
+      <tr>
+        <td>merchantOrderId</td>
+        <td>string</td>
+        <td>商户订单号</td>
+      </tr>
+      <tr>
+        <td>orderAmount</td>
+        <td>int64</td>
+        <td>订单金额（单位：分）</td>
+      </tr>
+      <tr>
+        <td>orderStatus</td>
+        <td>int</td>
+        <td>订单状态，参考订单状态表</td>
+      </tr>
+      <tr>
+        <td>statusMessage</td>
+        <td>string</td>
+        <td>错误信息或提示</td>
+      </tr>
+      <tr>
+        <td>metadata</td>
+        <td>string</td>
+        <td>透传参数，原样返回</td>
+      </tr>
+      <tr>
+        <td>signature</td>
+        <td>string</td>
+        <td>签名，MD5校验</td>
+      </tr>
+    </table>
+
+    <h4>回调示例</h4>
+    <pre>
+{
+  "merchantId": 10000,
+  "platformOrderId": "PO1293891283912",
+  "merchantOrderId": "MOq1029301293",
+  "orderAmount": 10000,
+  "orderStatus": 3,
+  "statusMessage": "success",
+  "metadata": "pay",
+  "signature": "SKJDLKSJ91283"
+}
+</pre>
+
+    <div class="note">
+      <b>注意事项：</b><br />
+      - 回调可能重复，请商户幂等处理<br />
+      - orderAmount 单位：分<br />
+      - orderStatus 对应订单状态枚举<br />
+      - signature 验签规则与接口请求一致，signature 本身不参与签名
+    </div>
+
+    <h3>2️⃣ 代付回调（Withdraw Callback）</h3>
+    <pre>POST 创建订单时传入的 callbackUrl</pre>
+
+    <table>
+      <tr>
+        <th>字段</th>
+        <th>类型</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>merchantId</td>
+        <td>int</td>
+        <td>商户号</td>
+      </tr>
+      <tr>
+        <td>platformOrderId</td>
+        <td>string</td>
+        <td>平台订单号</td>
+      </tr>
+      <tr>
+        <td>merchantOrderId</td>
+        <td>string</td>
+        <td>商户订单号</td>
+      </tr>
+      <tr>
+        <td>orderAmount</td>
+        <td>int64</td>
+        <td>订单金额（单位：分）</td>
+      </tr>
+      <tr>
+        <td>orderStatus</td>
+        <td>int</td>
+        <td>订单状态，参考订单状态表</td>
+      </tr>
+      <tr>
+        <td>statusMessage</td>
+        <td>string</td>
+        <td>错误信息或提示</td>
+      </tr>
+      <tr>
+        <td>metadata</td>
+        <td>string</td>
+        <td>透传参数，原样返回</td>
+      </tr>
+      <tr>
+        <td>transactionReference</td>
+        <td>string</td>
+        <td>银行打款凭证（UTR号）</td>
+      </tr>
+      <tr>
+        <td>signature</td>
+        <td>string</td>
+        <td>签名，MD5 校验</td>
+      </tr>
+    </table>
+
+    <h4>回调示例</h4>
+    <pre>
+{
+  "merchantId": 1001,
+  "platformOrderId": "PO1098230918823",
+  "merchantOrderId": "MO0qq92031982391",
+  "orderAmount": 10000,
+  "orderStatus": 3,
+  "statusMessage": "success",
+  "metadata": "payout",
+  "transactionReference": "UTR12032901923",
+  "signature": "SKJDHHJKLSD0909"
+}
+</pre>
+
+    <div class="note">
+      <b>注意事项：</b><br />
+      - 回调可能重复，请商户幂等处理<br />
+      - orderAmount 单位：分<br />
+      - orderStatus 对应订单状态枚举<br />
+      - transactionReference 仅代付成功时返回，可作为银行打款凭证<br />
+      - signature 验签规则与接口请求一致，signature 本身不参与签名
+    </div>
+
+  </div>
+
+  <div class="warn">
+    <b>注意：</b>
+    回调可能重复推送，请商户做幂等处理
+  </div>
+
+  <div class="section">
+    <h2>九、订单状态说明</h2>
+    <h3>1️⃣ 代收订单状态</h3>
+    <table>
+      <tr>
+        <th>orderStatus</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>1</td>
+        <td>未支付</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>已支付</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>失败</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td>退款</td>
+      </tr>
+    </table>
+
+    <h3>2️⃣ 代付订单状态</h3>
+    <table>
+      <tr>
+        <th>orderStatus</th>
+        <th>说明</th>
+      </tr>
+      <tr>
+        <td>0</td>
+        <td>提交中</td>
+      </tr>
+      <tr>
+        <td>1</td>
+        <td>待提交</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td>打款中</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td>已打款</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td>失败</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td>退款</td>
+      </tr>
+    </table>
+  </div>
+
+        <footer class="page-footer">
+          <span>FlyPay Developer Documentation</span>
+          <span>面向商户的 API 接入规范 · v1</span>
+        </footer>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const sectionIds = [
+        "basic", "response", "errors", "signature", "collection",
+        "payout", "balance", "callback", "status"
+      ];
+      const sections = [...document.querySelectorAll(".section")];
+      const navLinks = [...document.querySelectorAll(".side-nav a")];
+      const menuButton = document.querySelector(".menu-button");
+      const overlay = document.querySelector(".overlay");
+      const progress = document.querySelector(".scroll-progress");
+
+      sections.forEach((section, index) => {
+        section.id = sectionIds[index];
+        section.dataset.section = `CHAPTER ${String(index + 1).padStart(2, "0")}`;
+      });
+
+      document.querySelectorAll("table").forEach((table) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "table-scroll";
+        table.parentNode.insertBefore(wrapper, table);
+        wrapper.appendChild(table);
+      });
+
+      const copyText = async (text) => {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          return;
+        }
+        const input = document.createElement("textarea");
+        input.value = text;
+        input.setAttribute("readonly", "");
+        input.style.position = "fixed";
+        input.style.opacity = "0";
+        document.body.appendChild(input);
+        input.select();
+        const copied = document.execCommand("copy");
+        input.remove();
+        if (!copied) throw new Error("copy failed");
+      };
+
+      document.querySelectorAll("pre").forEach((pre) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "code-wrap";
+        pre.parentNode.insertBefore(wrapper, pre);
+        wrapper.appendChild(pre);
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "copy-button";
+        button.setAttribute("aria-label", "复制代码");
+        button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>';
+        wrapper.appendChild(button);
+
+        button.addEventListener("click", async () => {
+          try {
+            await copyText(pre.textContent.trim());
+            button.classList.add("copied");
+            button.setAttribute("aria-label", "已复制");
+            button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 12 4 4L19 6"/></svg>';
+            setTimeout(() => {
+              button.classList.remove("copied");
+              button.setAttribute("aria-label", "复制代码");
+              button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"/></svg>';
+            }, 1600);
+          } catch (error) {
+            button.setAttribute("aria-label", "复制失败");
+          }
+        });
+      });
+
+      const closeMenu = () => {
+        document.body.classList.remove("menu-open");
+        menuButton.setAttribute("aria-expanded", "false");
+      };
+
+      menuButton.addEventListener("click", () => {
+        const open = document.body.classList.toggle("menu-open");
+        menuButton.setAttribute("aria-expanded", String(open));
+      });
+      overlay.addEventListener("click", closeMenu);
+      navLinks.forEach((link) => link.addEventListener("click", closeMenu));
+
+      const observer = new IntersectionObserver((entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (!visible) return;
+        navLinks.forEach((link) => {
+          link.classList.toggle("active", link.getAttribute("href") === `#${visible.target.id}`);
+        });
+      }, { rootMargin: "-12% 0px -72% 0px", threshold: 0 });
+      sections.forEach((section) => observer.observe(section));
+
+      const updateProgress = () => {
+        const scrollable = document.documentElement.scrollHeight - window.innerHeight;
+        progress.style.width = `${scrollable > 0 ? (window.scrollY / scrollable) * 100 : 0}%`;
+      };
+      window.addEventListener("scroll", updateProgress, { passive: true });
+      updateProgress();
+    })();
+  </script>
+
+</body>
+
+</html>

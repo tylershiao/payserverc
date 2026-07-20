@@ -6,10 +6,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func apiV1Router(e *gin.RouterGroup) {
-	e.POST("pi/create", apiv1.PayInCreate)
-	e.POST("pi/query", apiv1.PayInQuery)
-	e.POST("po/create", apiv1.PayOutCreate)
-	e.POST("po/query", apiv1.PayOutQuery)
-	e.POST("mer/balance", apiv1.Balance)
+func apiInV1Router(e *gin.RouterGroup) {
+	e.POST("ds/ld", apiv1.PayInCreate)
+	e.POST("ds/cd", apiv1.PayInQuery)
+	e.POST("df/ld", apiv1.PayOutCreate)
+	e.POST("df/cd", apiv1.PayOutQuery)
+	e.POST("sh/ye", apiv1.Balance)
 }

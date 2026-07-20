@@ -42,31 +42,33 @@ func (g *Gin) Response() {
 		case CodeOK:
 			g.Msg = "Success"
 		case CodeInnerError:
-			g.Msg = "Server error"
+			g.Msg = "Internal service error"
 		case CodeParam:
 			if g.Msg == "" {
-				g.Msg = "Incorrect request parameters"
+				g.Msg = "Invalid request parameters"
 			}
 		case CodeServer:
-			g.Msg = "Server under maintenance"
+			g.Msg = "Service temporarily unavailable"
 		case CodeSign:
-			g.Msg = "Signature Error"
+			g.Msg = "Signature verification failed"
+		case CodeOrderNotExist:
+			g.Msg = "Order not found"
 		case CodeDuplicateOrder:
-			g.Msg = "Duplicate order"
+			g.Msg = "Merchant order already exists"
 		case CodeRisk:
-			g.Msg = "Risky user"
+			g.Msg = "Transaction rejected by risk control"
 		case CodeInvalidMerchat:
-			g.Msg = "Invalid MID"
+			g.Msg = "Merchant not found"
 		case CodeMerchatClose:
-			g.Msg = "Merchat closed"
+			g.Msg = "Merchant service unavailable"
 		case CodeInsufficientBalance:
-			g.Msg = "Insufficient balance"
+			g.Msg = "Merchant balance is insufficient"
 		case CodeIP:
-			g.Msg = "Invalid ip"
+			g.Msg = "Source IP is not allowed"
 		case CodeNoChannel:
-			g.Msg = "No payment channels available"
+			g.Msg = "No payment channel is currently available"
 		case CodeTooManyRequests:
-			g.Msg = "Too many requests"
+			g.Msg = "Request rate limit exceeded"
 		}
 	}
 	g.Context.JSON(http.StatusOK, g.R)
@@ -120,7 +122,7 @@ func (g *Gin) GetRemoteIP() string {
 }
 
 func (g *Gin) CheckSign(send interface{}, key, signStr string) (pass bool) {
-	str := sign.APISignMD5(send, key, "Sign")
+	str := sign.APISignMD5(send, key, "Sign", "signature")
 	pass = strings.EqualFold(str, signStr)
 	if !pass {
 		log.Debug("check sign fail:%v", send)

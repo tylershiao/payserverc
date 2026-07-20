@@ -55,14 +55,14 @@ type PayResp struct {
 }
 
 type PayCallbackReq struct {
-	MID      int    `json:"MID"`
-	OrderID  string `json:"OrderID"`  // 平台订单号
-	MOrderID string `json:"MOrderID"` // 商户订单号
-	Amount   int64  `json:"Amount"`   // 金额（单位：最小币种，如分）
-	Status   int    `json:"Status"`   // 订单状态
-	Msg      string `json:"Msg"`      // 错误信息
-	Extra    string `json:"Extra"`
-	Sign     string `json:"Sign"` // 签名
+	MerchantID      int    `json:"merchantId"`
+	PlatformOrderID string `json:"platformOrderId"` // 平台订单号
+	MerchantOrderID string `json:"merchantOrderId"` // 商户订单号
+	OrderAmount     int64  `json:"orderAmount"`     // 金额（单位：最小币种，如分）
+	OrderStatus     int    `json:"orderStatus"`     // 订单状态
+	StatusMessage   string `json:"statusMessage"`   // 错误信息
+	Metadata        string `json:"metadata"`
+	Signature       string `json:"signature"` // 签名
 }
 
 type WithdrawReq struct {
@@ -94,15 +94,15 @@ type WithdrawResp struct {
 }
 
 type WithdrawCallbackReq struct {
-	MID      int    `json:"MID"`
-	OrderID  string `json:"OrderID"`  // 平台订单号
-	MOrderID string `json:"MOrderID"` // 商户订单号
-	Amount   int64  `json:"Amount"`   // 金额（单位：最小币种，如分）
-	Status   int    `json:"Status"`   // 订单状态
-	Msg      string `json:"Msg"`      // 错误信息
-	Extra    string `json:"Extra"`
-	Utr      string `json:"Utr"`  // 打款utr
-	Sign     string `json:"Sign"` // 签名
+	MerchantID           int    `json:"merchantId"`
+	PlatformOrderID      string `json:"platformOrderId"` // 平台订单号
+	MerchantOrderID      string `json:"merchantOrderId"` // 商户订单号
+	OrderAmount          int64  `json:"orderAmount"`     // 金额（单位：最小币种，如分）
+	OrderStatus          int    `json:"orderStatus"`     // 订单状态
+	StatusMessage        string `json:"statusMessage"`   // 错误信息
+	Metadata             string `json:"metadata"`
+	TransactionReference string `json:"transactionReference"` // 打款utr
+	Signature            string `json:"signature"`            // 签名
 }
 
 type OrderPay struct {

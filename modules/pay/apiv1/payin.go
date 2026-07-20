@@ -18,25 +18,25 @@ import (
 )
 
 type PayInCreateReq struct {
-	MID        int    `json:"MID" binding:"required"`
-	MOrderID   string `json:"MOrderID" binding:"required"`
-	Amount     int    `json:"Amount" binding:"required"`
-	IP         string `json:"IP" binding:"required"`
-	NotifyURL  string `json:"NotifyURL" binding:"required"`
-	UserMobile string `json:"UserMobile" binding:"required"`
-	UserID     any    `json:"UserID"`
-	UserName   string `json:"UserName"`
-	UserEmail  string `json:"UserEmail"`
-	DeviceID   string `json:"DeviceID"`
-	Extra      string `json:"Extra"`
-	Sign       string `json:"Sign" binding:"required"`
+	MerchantID        int    `json:"merchantId" binding:"required"`
+	MerchantOrderID   string `json:"merchantOrderId" binding:"required"`
+	OrderAmount       int    `json:"orderAmount" binding:"required"`
+	ClientIP          string `json:"clientIp" binding:"required"`
+	CallbackURL       string `json:"callbackUrl" binding:"required"`
+	CustomerPhone     string `json:"customerPhone" binding:"required"`
+	CustomerID        any    `json:"customerId"`
+	CustomerName      string `json:"customerName"`
+	CustomerEmail     string `json:"customerEmail"`
+	DeviceFingerprint string `json:"deviceFingerprint"`
+	Metadata          string `json:"metadata"`
+	Signature         string `json:"signature" binding:"required"`
 }
 
 type PayInCreateResp struct {
-	MID      int    // 商户号
-	OrderID  string // 平台订单号
-	MOrderID string // 商户订单号
-	PayLink  string // 支付链接
+	MerchantID      int    `json:"merchantId"`      // 商户号
+	PlatformOrderID string `json:"platformOrderId"` // 平台订单号
+	MerchantOrderID string `json:"merchantOrderId"` // 商户订单号
+	CheckoutURL     string `json:"checkoutUrl"`     // 支付链接
 }
 
 func PayInCreate(c *gin.Context) {
@@ -48,43 +48,43 @@ func PayInCreate(c *gin.Context) {
 	if !a.S(req) {
 		return
 	}
-	if !util.IsValidIndianLocalMobile(req.UserMobile) {
+	if !util.IsValidIndianLocalMobile(req.CustomerPhone) {
 		a.Code = app.CodeParam
 		a.Msg = "Invalid Mobile"
 		return
 	}
-	if !util.IsValidIP(req.IP) {
+	if !util.IsValidIP(req.ClientIP) {
 		a.Code = app.CodeParam
 		a.Msg = "Invalid IP"
 		return
 	}
-	if !util.IsValidHTTPURL(req.NotifyURL) {
+	if !util.IsValidHTTPURL(req.CallbackURL) {
 		a.Code = app.CodeParam
 		a.Msg = "Invalid NotifyURL"
 		return
 	}
-	if !a.CheckMerchat(req, req.MID, req.Sign, 1) {
+	if !a.CheckMerchat(req, req.MerchantID, req.Signature, 1) {
 		return
 	}
 	if len(a.Merchat.PayRangeSub) == 2 {
 		min := int(a.Merchat.PayRangeSub[0] * 100)
 		max := int(a.Merchat.PayRangeSub[1] * 100)
-		if req.Amount < min {
+		if req.OrderAmount < min {
 			a.Code = app.CodeParam
 			a.Msg = fmt.Sprintf("The payment limit cannot be lower than %d", min)
 			return
 		}
-		if max > 0 && req.Amount > max {
+		if max > 0 && req.OrderAmount > max {
 			a.Code = app.CodeParam
 			a.Msg = fmt.Sprintf("The payment limit cannot be higher than %d", max)
 			return
 		}
 	}
-	data := &common.CommonPayData{Name: req.UserName, Mobile: req.UserMobile, Email: req.UserEmail, IP: req.IP, DeviceID: req.DeviceID}
+	data := &common.CommonPayData{Name: req.CustomerName, Mobile: req.CustomerPhone, Email: req.CustomerEmail, IP: req.ClientIP, DeviceID: req.DeviceFingerprint}
 	if !a.Risk(data) {
 		return
 	}
-	one := &common.OrderPay{MOrderID: req.MOrderID, MID: req.MID}
+	one := &common.OrderPay{MOrderID: req.MerchantOrderID, MID: req.MerchantID}
 	db.Mysql().Get(one)
 	if one.ID > 0 {
 		a.Code = app.CodeDuplicateOrder
@@ -93,20 +93,20 @@ func PayInCreate(c *gin.Context) {
 	log.Debug("PayInCreate:%+v", req)
 
 	tmp, _ := json.Marshal(data)
-	amount := util.Decimal(float64(req.Amount)/100, 2)
+	amount := util.Decimal(float64(req.OrderAmount)/100, 2)
 	orderID := call.NewOrderIDV2(common.PayInPrefix)
 
-	if req.MID == 10000 { // 测试号
+	if req.MerchantID == 10000 { // 测试号
 		order := &common.OrderPay{
 			OrderID:     orderID,
-			MOrderID:    req.MOrderID,
-			MID:         req.MID,
+			MOrderID:    req.MerchantOrderID,
+			MID:         req.MerchantID,
 			Amount:      amount,
 			PayAccount:  tmp,
 			Status:      common.StatusROrderCreate,
-			UID:         util.AnyToString(req.UserID),
-			Extra:       req.Extra,
-			CallbackURL: req.NotifyURL,
+			UID:         util.AnyToString(req.CustomerID),
+			Extra:       req.Metadata,
+			CallbackURL: req.CallbackURL,
 			Fee:         a.Merchat.CallFee(1, amount),
 			// PayChannel:  ret.Channel,
 			RealTimeSettle: true,
@@ -117,10 +117,10 @@ func PayInCreate(c *gin.Context) {
 			return
 		}
 		a.Data = &PayInCreateResp{
-			MID:      req.MID,
-			OrderID:  orderID,
-			MOrderID: req.MOrderID,
-			PayLink:  "https://www.google.com",
+			MerchantID:      req.MerchantID,
+			PlatformOrderID: orderID,
+			MerchantOrderID: req.MerchantOrderID,
+			CheckoutURL:     "https://www.google.com",
 		}
 		success := false
 		if rand.Intn(2) == 0 {
@@ -133,15 +133,15 @@ func PayInCreate(c *gin.Context) {
 	}
 
 	ret := handler.Recharge(&common.PayReq{
-		MchId:    req.MID,
+		MchId:    req.MerchantID,
 		OrderID:  orderID,
-		Name:     req.UserName,
-		Mobile:   req.UserMobile,
-		Email:    req.UserEmail,
+		Name:     req.CustomerName,
+		Mobile:   req.CustomerPhone,
+		Email:    req.CustomerEmail,
 		Amount:   amount,
-		UID:      util.AnyToString(req.UserID),
-		IP:       req.IP,
-		DeviceID: req.DeviceID,
+		UID:      util.AnyToString(req.CustomerID),
+		IP:       req.ClientIP,
+		DeviceID: req.DeviceFingerprint,
 		Merchat:  a.Merchat,
 	})
 	if ret.Err != nil {
@@ -152,15 +152,15 @@ func PayInCreate(c *gin.Context) {
 
 	order := &common.OrderPay{
 		OrderID:     orderID,
-		MOrderID:    req.MOrderID,
+		MOrderID:    req.MerchantOrderID,
 		APIOrderID:  ret.APIOrderID,
-		MID:         req.MID,
+		MID:         req.MerchantID,
 		Amount:      amount,
 		PayAccount:  tmp,
 		Status:      common.StatusROrderCreate,
-		UID:         util.AnyToString(req.UserID),
-		Extra:       req.Extra,
-		CallbackURL: req.NotifyURL,
+		UID:         util.AnyToString(req.CustomerID),
+		Extra:       req.Metadata,
+		CallbackURL: req.CallbackURL,
 		Fee:         a.Merchat.CallFee(1, amount),
 		PayChannel:  ret.Channel,
 		PayUrl:      ret.URL,
@@ -178,25 +178,25 @@ func PayInCreate(c *gin.Context) {
 		return
 	}
 	a.Data = &PayInCreateResp{
-		MID:      req.MID,
-		OrderID:  orderID,
-		MOrderID: req.MOrderID,
-		PayLink:  ret.URL,
+		MerchantID:      req.MerchantID,
+		PlatformOrderID: orderID,
+		MerchantOrderID: req.MerchantOrderID,
+		CheckoutURL:     ret.URL,
 	}
 }
 
 type PayInQueryReq struct {
-	MID      int    `json:"MID" binding:"required"`
-	MOrderID string `json:"MOrderID" binding:"required"`
-	Sign     string `json:"Sign" binding:"required"`
+	MerchantID      int    `json:"merchantId" binding:"required"`
+	MerchantOrderID string `json:"merchantOrderId" binding:"required"`
+	Signature       string `json:"signature" binding:"required"`
 }
 
 type PayInQueryResp struct {
-	MID      int    // 商户号
-	OrderID  string // 平台订单号
-	MOrderID string // 商户订单号
-	Amount   int64  // 订单金额
-	Status   int    // 订单状态
+	MerchantID      int    `json:"merchantId"`      // 商户号
+	PlatformOrderID string `json:"platformOrderId"` // 平台订单号
+	MerchantOrderID string `json:"merchantOrderId"` // 商户订单号
+	OrderAmount     int64  `json:"orderAmount"`     // 订单金额
+	OrderStatus     int    `json:"orderStatus"`     // 订单状态
 }
 
 func PayInQuery(c *gin.Context) {
@@ -208,10 +208,10 @@ func PayInQuery(c *gin.Context) {
 	if !a.S(req) {
 		return
 	}
-	if !a.CheckMerchat(req, req.MID, req.Sign, 2) {
+	if !a.CheckMerchat(req, req.MerchantID, req.Signature, 2) {
 		return
 	}
-	order := &common.OrderPay{MOrderID: req.MOrderID, MID: req.MID}
+	order := &common.OrderPay{MOrderID: req.MerchantOrderID, MID: req.MerchantID}
 	err := db.Mysql().Get(order)
 	if order.ID == 0 {
 		a.Code = app.CodeOrderNotExist
@@ -222,10 +222,10 @@ func PayInQuery(c *gin.Context) {
 		return
 	}
 	a.Data = &PayInQueryResp{
-		MID:      req.MID,
-		OrderID:  order.OrderID,
-		MOrderID: req.MOrderID,
-		Amount:   int64(order.Amount * 100),
-		Status:   order.Status,
+		MerchantID:      req.MerchantID,
+		PlatformOrderID: order.OrderID,
+		MerchantOrderID: req.MerchantOrderID,
+		OrderAmount:     int64(order.Amount * 100),
+		OrderStatus:     order.Status,
 	}
 }

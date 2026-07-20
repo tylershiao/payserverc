@@ -99,9 +99,9 @@ func PayCallback(order *common.OrderPay, success bool) error {
 			log.Error("invalid merchat:%d", order.MID)
 			return nil
 		}
-		send := &common.PayCallbackReq{MID: order.MID, OrderID: order.OrderID, MOrderID: order.MOrderID,
-			Amount: int64(order.Amount * 100), Status: status, Msg: order.Message, Extra: order.Extra}
-		send.Sign = sign.SignMD5(send, merchat.Key, "Sign")
+		send := &common.PayCallbackReq{MerchantID: order.MID, PlatformOrderID: order.OrderID, MerchantOrderID: order.MOrderID,
+			OrderAmount: int64(order.Amount * 100), OrderStatus: status, StatusMessage: order.Message, Metadata: order.Extra}
+		send.Signature = sign.SignMD5(send, merchat.Key, "Sign", "signature")
 		IndexTryWithParam(NotifyInerval, func() error {
 			return util.HttpPostWithoutRet(order.CallbackURL, send, nil)
 		})
@@ -153,9 +153,9 @@ func PayCallback(order *common.OrderPay, success bool) error {
 	// 	log.Error("invalid merchat:%d", order.MID)
 	// 	return nil
 	// }
-	// send := &common.PayCallbackReq{MchId: order.MID, OrderId: order.OrderID, MOrderId: order.MOrderID,
-	// 	Amount: int64(order.Amount * 100), Status: status, Message: order.Message, Extra: order.Extra}
-	// send.Sign = sign.SignMD5(send, merchat.Key, "Sign")
+	// send := &common.PayCallbackReq{MerchantID: order.MID, PlatformOrderID: order.OrderID, MerchantOrderID: order.MOrderID,
+	// 	OrderAmount: int64(order.Amount * 100), OrderStatus: status, StatusMessage: order.Message, Metadata: order.Extra}
+	// send.Signature = sign.SignMD5(send, merchat.Key, "Sign", "signature")
 	// IndexTryWithParam(NotifyInerval, func() error {
 	// 	return util.HttpPostWithoutRet(order.CallbackURL, send, nil)
 	// })
@@ -249,9 +249,9 @@ func WithdrawCallback(order *common.OrderWithdraw, originStatus int) error {
 			log.Error("invalid merchat:%d", order.MID)
 			return nil
 		}
-		send := &common.WithdrawCallbackReq{MID: order.MID, OrderID: order.OrderID, MOrderID: order.MOrderID,
-			Amount: int64(order.Amount * 100), Status: order.Status, Msg: order.Message, Extra: order.Extra, Utr: order.Utr}
-		send.Sign = sign.SignMD5(send, merchat.Key, "Sign")
+		send := &common.WithdrawCallbackReq{MerchantID: order.MID, PlatformOrderID: order.OrderID, MerchantOrderID: order.MOrderID,
+			OrderAmount: int64(order.Amount * 100), OrderStatus: order.Status, StatusMessage: order.Message, Metadata: order.Extra, TransactionReference: order.Utr}
+		send.Signature = sign.SignMD5(send, merchat.Key, "Sign", "signature")
 		IndexTryWithParam(NotifyInerval, func() error {
 			return util.HttpPostWithoutRet(order.CallbackURL, send, nil)
 		})
@@ -306,9 +306,9 @@ func WithdrawCallback(order *common.OrderWithdraw, originStatus int) error {
 	// 	err = errors.New("invalid merchat")
 	// 	return err
 	// }
-	// send := &common.WithdrawCallbackReq{MchId: order.MID, OrderId: order.OrderID, MOrderId: order.MOrderID,
-	// 	Amount: int64(order.Amount * 100), Status: order.Status, Message: order.Message, Extra: order.Extra, Utr: order.Utr}
-	// send.Sign = sign.SignMD5(send, merchat.Key, "Sign")
+	// send := &common.WithdrawCallbackReq{MerchantID: order.MID, PlatformOrderID: order.OrderID, MerchantOrderID: order.MOrderID,
+	// 	OrderAmount: int64(order.Amount * 100), OrderStatus: order.Status, StatusMessage: order.Message, Metadata: order.Extra, TransactionReference: order.Utr}
+	// send.Signature = sign.SignMD5(send, merchat.Key, "Sign", "signature")
 	// IndexTryWithParam(NotifyInerval, func() error {
 	// 	return util.HttpPostWithoutRet(order.CallbackURL, send, nil)
 	// })

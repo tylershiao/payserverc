@@ -9,15 +9,15 @@ import (
 )
 
 type BalanceReq struct {
-	MID  int    `json:"MID" binding:"required"`
-	Sign string `json:"Sign" binding:"required"`
+	MerchantID int    `json:"merchantId" binding:"required"`
+	Signature  string `json:"signature" binding:"required"`
 }
 
 type BalanceResp struct {
-	MID               int   // 商户号
-	AvailableBalance  int64 // 可用余额
-	SettlementBalance int64 // 待结算余额
-	FrozenBalance     int64 // 冻结金额
+	MerchantID     int   `json:"merchantId"`     // 商户号
+	AvailableFunds int64 `json:"availableFunds"` // 可用余额
+	PendingFunds   int64 `json:"pendingFunds"`   // 待结算余额
+	LockedFunds    int64 `json:"lockedFunds"`    // 冻结金额
 }
 
 // Balance 函数用于获取商户余额信息
@@ -31,7 +31,7 @@ func Balance(c *gin.Context) {
 	if !a.S(req) {
 		return
 	}
-	mer := &common.Merchats{MID: req.MID}
+	mer := &common.Merchats{MID: req.MerchantID}
 	err := db.Mysql().Get(mer)
 	if err != nil {
 		return
@@ -39,13 +39,13 @@ func Balance(c *gin.Context) {
 	if mer.ID > 0 {
 		a.Merchat = mer
 	}
-	if !a.CheckMerchat(req, req.MID, req.Sign, 0) {
+	if !a.CheckMerchat(req, req.MerchantID, req.Signature, 0) {
 		return
 	}
 	a.Data = &BalanceResp{
-		MID:               req.MID,
-		AvailableBalance:  int64(mer.Balance * 100),
-		SettlementBalance: int64(mer.BalanceSettle * 100),
-		FrozenBalance:     int64(mer.BalanceFreeze * 100),
+		MerchantID:     req.MerchantID,
+		AvailableFunds: int64(mer.Balance * 100),
+		PendingFunds:   int64(mer.BalanceSettle * 100),
+		LockedFunds:    int64(mer.BalanceFreeze * 100),
 	}
 }

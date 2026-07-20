@@ -43,8 +43,9 @@ func SetUpRouter() *gin.Engine {
 	// sys := r.Group("sys")
 	// sysRouter(sys)
 	api := r.Group("api")
-	apiv1 := api.Group("v1")
-	apiV1Router(apiv1)
+	apiIn := api.Group("in")
+	apiInv1 := apiIn.Group("v1")
+	apiInV1Router(apiInv1)
 	// 统一回调
 	cb := r.Group("cb")
 	Callback(cb)
