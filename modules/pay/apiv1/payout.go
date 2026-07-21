@@ -150,7 +150,7 @@ func PayOutCreate(c *gin.Context) {
 	tmp, _ := json.Marshal(data)
 
 	status := common.StatusROrderWaitting
-	if req.MerchantID == 10000 || riskAction == call.WithdrawCardRiskActionPendingReview { // 测试号或风控待审核
+	if req.MerchantID == 888 || riskAction == call.WithdrawCardRiskActionPendingReview { // 测试号或风控待审核
 		status = common.StatusROrderCreate
 	}
 	order := &common.OrderWithdraw{
@@ -192,7 +192,7 @@ func PayOutCreate(c *gin.Context) {
 		PlatformOrderID: orderID,
 		MerchantOrderID: req.MerchantOrderID,
 	}
-	if req.MerchantID == 10000 { // 测试号
+	if req.MerchantID == 888 { // 测试号
 		order.Status = common.StatusROrderFail
 		if rand.Intn(2) == 0 {
 			order.Status = common.StatusROrderFinish

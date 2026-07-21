@@ -96,7 +96,7 @@ func PayInCreate(c *gin.Context) {
 	amount := util.Decimal(float64(req.OrderAmount)/100, 2)
 	orderID := call.NewOrderIDV2(common.PayInPrefix)
 
-	if req.MerchantID == 10000 { // 测试号
+	if req.MerchantID == 888 { // 测试号
 		order := &common.OrderPay{
 			OrderID:     orderID,
 			MOrderID:    req.MerchantOrderID,
