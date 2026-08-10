@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/liangdas/mqant/log"
+	"github.com/shopspring/decimal"
 )
 
 // NewSub 初始化子支付模块
@@ -139,7 +140,7 @@ func (s *Sub) PackPayReq() interface{} {
 		PayType:    "1",
 		NotifyUrl:  s.Base.GetPayCallbackURL(),
 		ReturnUrl:  values.GetFrontCallback(),
-		Amount:     int64(r.Amount * 100),
+		Amount:     decimal.NewFromFloat(r.Amount).Shift(2).IntPart(),
 		Currency:   "INR",
 		Name:       r.Name,
 		Phone:      r.Mobile,
@@ -174,7 +175,7 @@ func (s *Sub) PackWithdrawReq() interface{} {
 	send := &WithdrawReq{
 		MerchantID: mid,
 		OrderID:    r.OrderID,
-		Amount:     int64(r.Amount * 100),
+		Amount:     decimal.NewFromFloat(r.Amount).Shift(2).IntPart(),
 		// WithdrawType: ,
 		NotifyUrl: s.Base.GetWithdrawCallbackURL(),
 		Name:      r.Name,
@@ -235,21 +236,38 @@ func (s *Sub) PackQueryPayReq() interface{} {
 func (s *Sub) CheckSign(str string) bool {
 	// str += "&key=" + key
 	checkSign := ""
-	s.Base.CallbackResp.Msg = "success"
 	mySign := ""
 	if s.Base.Opt == base.OPTPayCB {
 		req := s.Base.CallbackReq.(*PayCallbackReq)
 		log.Debug("checkSign pay:%+v", *req)
 		checkSign = req.Data.Sign
 		s.Base.CallbackResp.OrderID = req.Data.OrderID
-		s.Base.CallbackResp.Success = req.Code == 200
+		switch req.Code {
+		case 200:
+			s.Base.CallbackResp.Success = true
+		case 400:
+			s.Base.CallbackResp.Success = false
+		default:
+			s.Base.CallbackStatus = base.CallbackStatusPass
+			return false
+		}
+		// s.Base.CallbackResp.Success = req.Code == 200
 		mySign = s.Base.SignMD5(req.Data)
 	} else if s.Base.Opt == base.OPTWithdrawCB {
 		req := s.Base.CallbackReq.(*WithdrawCallbackReq)
 		log.Debug("checkSign withdraw:%+v", *req)
 		checkSign = req.Data.Sign
 		s.Base.CallbackResp.OrderID = req.Data.OrderID
-		s.Base.CallbackResp.Success = req.Code == 200
+		switch req.Code {
+		case 200:
+			s.Base.CallbackResp.Success = true
+		case 400:
+			s.Base.CallbackResp.Success = false
+		default:
+			s.Base.CallbackStatus = base.CallbackStatusPass
+			return false
+		}
+		// s.Base.CallbackResp.Success = req.Code == 200
 		s.Base.CallbackResp.APIOrderID = req.Data.ID
 		s.Base.CallbackResp.FailMessage = req.Message
 		s.Base.CallbackResp.Utr = req.Data.UTR

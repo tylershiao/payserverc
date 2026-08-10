@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/liangdas/mqant/log"
+	"github.com/shopspring/decimal"
 )
 
 type PayInCreateReq struct {
@@ -225,7 +226,7 @@ func PayInQuery(c *gin.Context) {
 		MerchantID:      req.MerchantID,
 		PlatformOrderID: order.OrderID,
 		MerchantOrderID: req.MerchantOrderID,
-		OrderAmount:     int64(order.Amount * 100),
+		OrderAmount:     decimal.NewFromFloat(order.Amount).Shift(2).IntPart(),
 		OrderStatus:     order.Status,
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/liangdas/mqant/log"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -100,7 +101,7 @@ func PayCallback(order *common.OrderPay, success bool) error {
 			return nil
 		}
 		send := &common.PayCallbackReq{MerchantID: order.MID, PlatformOrderID: order.OrderID, MerchantOrderID: order.MOrderID,
-			OrderAmount: int64(order.Amount * 100), OrderStatus: status, StatusMessage: order.Message, Metadata: order.Extra}
+			OrderAmount: decimal.NewFromFloat(order.Amount).Shift(2).IntPart(), OrderStatus: status, StatusMessage: order.Message, Metadata: order.Extra}
 		send.Signature = sign.SignMD5(send, merchat.Key, "Sign", "signature")
 		IndexTryWithParam(NotifyInerval, func() error {
 			return util.HttpPostWithoutRet(order.CallbackURL, send, nil)
@@ -250,7 +251,7 @@ func WithdrawCallback(order *common.OrderWithdraw, originStatus int) error {
 			return nil
 		}
 		send := &common.WithdrawCallbackReq{MerchantID: order.MID, PlatformOrderID: order.OrderID, MerchantOrderID: order.MOrderID,
-			OrderAmount: int64(order.Amount * 100), OrderStatus: order.Status, StatusMessage: order.Message, Metadata: order.Extra, TransactionReference: order.Utr}
+			OrderAmount: decimal.NewFromFloat(order.Amount).Shift(2).IntPart(), OrderStatus: order.Status, StatusMessage: order.Message, Metadata: order.Extra, TransactionReference: order.Utr}
 		send.Signature = sign.SignMD5(send, merchat.Key, "Sign", "signature")
 		IndexTryWithParam(NotifyInerval, func() error {
 			return util.HttpPostWithoutRet(order.CallbackURL, send, nil)
