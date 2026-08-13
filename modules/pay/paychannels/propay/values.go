@@ -72,7 +72,8 @@ type PayCallbackReq struct {
 	ErrMsg         string `json:"errMsg"`         // 渠道错误描述
 	CreatedAt      int64  `json:"createdAt"`      // 创建时间，13位时间戳
 	ReqTime        int64  `json:"reqTime"`        // 通知请求时间，13位时间戳
-	Sign           string `json:"sign"`           // 签名
+	ChannelExtra   string `json:"channelExtra"`
+	Sign           string `json:"sign"` // 签名
 }
 
 // QueryPayReq 代收查询请求
