@@ -19,6 +19,9 @@
 .idea
 
 *test*
+!call/pay_test.go
+!modules/pay/apiv1/payin_test.go
+!modules/pay/paychannels/masterpay/base_test.go
 
 /pb/*.pb.go
 /docs/backend/swagger.json

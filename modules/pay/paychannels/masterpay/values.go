@@ -24,7 +24,7 @@ type PayReq struct {
 	// Param1           string `json:"param1"`           // （可选）扩展参数1，回调时原样返回
 	// Param2           string `json:"param2"`           // （可选）扩展参数2，回调时原样返回
 	// ValidateUserName string `json:"validateUserName"` // （可选）会员姓名，实名制模式需填
-	// RequestCardInfo  bool   `json:"requestCardInfo"`  // （可选）是否需要提供分配的卡信息，默认为 false
+	RequestCardInfo bool `json:"requestCardInfo"` // （可选）是否需要提供分配的卡信息，默认为 false
 }
 
 type PayResp struct {

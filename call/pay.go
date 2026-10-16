@@ -35,19 +35,27 @@ func PayCallback(order *common.OrderPay, success bool) error {
 	update["callback_time"] = time.Now().Unix()
 	update["api_order_id"] = order.APIOrderID
 
-	return db.Mysql().C().Transaction(func(tx *gorm.DB) error {
-		// 更新订单状态
-		res := tx.Model(&common.OrderPay{}).Where(fmt.Sprintf("id = %d and status <> %d", order.ID, status)).Updates(update)
-		if res.RowsAffected == 0 {
-			// err := errors.New("update fail")
+	var settledOrder *common.OrderPay
+	err := db.Mysql().C().Transaction(func(tx *gorm.DB) error {
+		current := &common.OrderPay{}
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(current, order.ID).Error; err != nil {
+			return err
+		}
+		// An earlier callback may have read a pending order before a successful payment committed.
+		if current.Status == status || (!success && current.Status != order.Status) {
 			return nil
 		}
+		// 更新订单状态
+		res := tx.Model(&common.OrderPay{}).Where("id = ? and status <> ?", order.ID, status).Updates(update)
 		if res.Error != nil {
 			log.Error("err:%v", res.Error)
 			return res.Error
 		}
+		if res.RowsAffected == 0 {
+			return nil
+		}
 		mer := &common.Merchats{}
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("mid = ?", order.MID).First(mer).Error
+		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("mid = ?", current.MID).First(mer).Error
 		if err != nil {
 			log.Error("err:%v", err)
 			return err
@@ -55,7 +63,7 @@ func PayCallback(order *common.OrderPay, success bool) error {
 		col := "balance_settle"
 		balTyp := common.FundDetailsBalanceTypeSettle
 		bal := mer.BalanceSettle
-		if order.RealTimeSettle { // 实时结算的通道直接增加余额
+		if current.RealTimeSettle { // 实时结算的通道直接增加余额
 			col = "balance"
 			balTyp = common.FundDetailsBalanceTypeAvailable
 			bal = mer.Balance
@@ -63,24 +71,24 @@ func PayCallback(order *common.OrderPay, success bool) error {
 		var addAmount float64
 		// 更新商户余额
 		if success {
-			addAmount = order.Amount - order.Fee
-		} else if order.Status == common.StatusROrderFinish { // 原本成功的单转失败了,要扣除余额
-			addAmount = -(order.Amount - order.Fee)
+			addAmount = current.Amount - current.Fee
+		} else if current.Status == common.StatusROrderFinish { // 原本成功的单转失败了,要扣除余额
+			addAmount = -(current.Amount - current.Fee)
 		}
 		if addAmount != 0 {
 			res := tx.Model(&common.Merchats{}).Where("id = ?", mer.ID).Updates(map[string]interface{}{col: gorm.Expr(fmt.Sprintf("%s + %.2f", col, addAmount))})
-			if res.RowsAffected == 0 {
-				err = errors.New("update fail")
-				return err
-			}
 			if res.Error != nil {
 				log.Error("err:%v", res.Error)
 				return res.Error
 			}
+			if res.RowsAffected == 0 {
+				err = errors.New("update fail")
+				return err
+			}
 			// 写入资金变动明细
 			fund := &common.FundDetails{
 				MID:             mer.MID,
-				OrderID:         order.OrderID,
+				OrderID:         current.OrderID,
 				Type:            common.FundDetailsTypeRecharge,
 				TypeName:        common.GetFundDetailsTypeName(common.FundDetailsTypeRecharge),
 				Amount:          addAmount,
@@ -94,20 +102,28 @@ func PayCallback(order *common.OrderPay, success bool) error {
 			}
 		}
 
-		// 回调商户
-		merchat := GetConfigMerchatsByID(order.MID)
-		if merchat == nil {
-			log.Error("invalid merchat:%d", order.MID)
-			return nil
-		}
-		send := &common.PayCallbackReq{MerchantID: order.MID, PlatformOrderID: order.OrderID, MerchantOrderID: order.MOrderID,
-			OrderAmount: decimal.NewFromFloat(order.Amount).Shift(2).IntPart(), OrderStatus: status, StatusMessage: order.Message, Metadata: order.Extra}
-		send.Signature = sign.SignMD5(send, merchat.Key, "Sign", "signature")
-		IndexTryWithParam(NotifyInerval, func() error {
-			return util.HttpPostWithoutRet(order.CallbackURL, send, nil)
-		})
+		current.Message = order.Message
+		settledOrder = current
 		return nil
 	})
+	if err != nil || settledOrder == nil {
+		return err
+	}
+
+	// Start merchant notifications only after the order and accounting transaction commits.
+	merchat := GetConfigMerchatsByID(settledOrder.MID)
+	if merchat == nil {
+		log.Error("invalid merchat:%d", settledOrder.MID)
+		return nil
+	}
+	send := &common.PayCallbackReq{MerchantID: settledOrder.MID, PlatformOrderID: settledOrder.OrderID, MerchantOrderID: settledOrder.MOrderID,
+		OrderAmount: decimal.NewFromFloat(settledOrder.Amount).Shift(2).IntPart(), OrderStatus: status, StatusMessage: settledOrder.Message, Metadata: settledOrder.Extra}
+	send.Signature = sign.SignMD5(send, merchat.Key, "Sign", "signature")
+	callbackURL := settledOrder.CallbackURL
+	IndexTryWithParam(NotifyInerval, func() error {
+		return util.HttpPostWithoutRet(callbackURL, send, nil)
+	})
+	return nil
 
 	// var err error
 	// tx := db.Mysql().Begin()

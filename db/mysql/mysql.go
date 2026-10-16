@@ -14,6 +14,11 @@ type MysqlClient struct {
 	client *gorm.DB
 }
 
+// NewMysqlClient wraps an initialized GORM connection.
+func NewMysqlClient(client *gorm.DB) *MysqlClient {
+	return &MysqlClient{client: client}
+}
+
 func InitMysqlClient(dsn string, debug bool) (*MysqlClient, error) {
 	dsn += "?charset=utf8mb4&parseTime=True&loc=Local"
 	// "user:pass@tcp(127.0.0.1:3306)/dbname?charset=utf8mb4&parseTime=True&loc=Local"
@@ -47,7 +52,7 @@ func InitMysqlClient(dsn string, debug bool) (*MysqlClient, error) {
 
 	InitBatchQueue(user_db)
 
-	return &MysqlClient{client: user_db}, nil
+	return NewMysqlClient(user_db), nil
 }
 
 func (m *MysqlClient) C() *gorm.DB {

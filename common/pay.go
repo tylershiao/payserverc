@@ -48,6 +48,7 @@ type PayReq struct {
 type PayResp struct {
 	APIOrderID   string
 	URL          string
+	Link         string
 	Channel      int
 	Err          error
 	Message      string
@@ -129,6 +130,7 @@ type OrderPay struct {
 	QueryNotify       int64          `json:"query_notify" form:"query_notify" gorm:"column:query_notify"`
 	QueryNotifyChatID int64          `json:"query_notify_chat_id" form:"query_notify_chat_id" gorm:"column:query_notify_chat_id"`
 	PayUrl            string         `json:"pay_url" form:"pay_url" gorm:"column:pay_url"`
+	IsDropped         bool           `json:"IsDropped" form:"IsDropped" gorm:"column:is_dropped;not null;default:0;comment:掉单标记;index"`
 }
 
 // TableName 代收订单 OrderPay自定义表名 order_pay

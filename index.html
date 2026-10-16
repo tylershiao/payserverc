@@ -768,6 +768,10 @@ MD5 → 大写
         <td>checkoutUrl</td>
         <td>支付链接</td>
       </tr>
+      <tr>
+        <td>link</td>
+        <td>深度链接（可选）；仅通道支持时返回，否则为空</td>
+      </tr>
     </table>
     <h4>返回示例</h4>
     <pre>
@@ -778,7 +782,8 @@ MD5 → 大写
     "merchantId": 10000,
     "platformOrderId": "PO01293091823",
     "merchantOrderId": "MO192834091287491",
-    "checkoutUrl": "https://pay.example.com?orderid=PO129417890257"
+    "checkoutUrl": "https://pay.example.com?orderid=PO129417890257",
+    "link": "upi://pay?pa=example@upi"
   }
 }
 </pre>

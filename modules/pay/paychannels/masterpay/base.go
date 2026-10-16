@@ -80,7 +80,11 @@ func (s *Sub) GetResp() error {
 		if resp.RetCode != "SUCCESS" || resp.PayURL == "" {
 			return errors.New("pay fail")
 		}
-		s.Base.PayResp = &common.PayResp{APIOrderID: resp.PayOrderID, URL: resp.PayURL, Channel: int(s.Base.Channel)}
+		link := ""
+		if resp.CardInfo != nil {
+			link = resp.CardInfo.Link
+		}
+		s.Base.PayResp = &common.PayResp{APIOrderID: resp.PayOrderID, URL: resp.PayURL, Link: link, Channel: int(s.Base.Channel)}
 		return nil
 	} else if s.Base.Opt == base.OPTWithdraw {
 		resp := s.Base.Resp.(*WithdrawResp)
@@ -147,7 +151,7 @@ func (s *Sub) PackPayReq() interface{} {
 		// Param1: ,
 		// Param2: ,
 		// ValidateUserName: ,
-		// RequestCardInfo: ,
+		RequestCardInfo: true,
 	}
 	send.Sign = s.Base.SignMD5(send)
 	return send

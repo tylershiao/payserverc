@@ -2,6 +2,7 @@ package apiv1
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"server/call"
@@ -16,6 +17,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/liangdas/mqant/log"
 	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
 )
 
 type PayInCreateReq struct {
@@ -38,6 +40,7 @@ type PayInCreateResp struct {
 	PlatformOrderID string `json:"platformOrderId"` // 平台订单号
 	MerchantOrderID string `json:"merchantOrderId"` // 商户订单号
 	CheckoutURL     string `json:"checkoutUrl"`     // 支付链接
+	Link            string `json:"link"`            // 深度链接
 }
 
 func PayInCreate(c *gin.Context) {
@@ -183,6 +186,7 @@ func PayInCreate(c *gin.Context) {
 		PlatformOrderID: orderID,
 		MerchantOrderID: req.MerchantOrderID,
 		CheckoutURL:     ret.URL,
+		Link:            ret.Link,
 	}
 }
 
@@ -214,13 +218,30 @@ func PayInQuery(c *gin.Context) {
 	}
 	order := &common.OrderPay{MOrderID: req.MerchantOrderID, MID: req.MerchantID}
 	err := db.Mysql().Get(order)
-	if order.ID == 0 {
+	if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && order.ID == 0) {
 		a.Code = app.CodeOrderNotExist
 		return
 	}
 	if err != nil {
 		a.Code = app.CodeInnerError
 		return
+	}
+	if order.Status != common.StatusROrderFinish {
+		if order.IsDropped {
+			if err := call.PayCallback(order, true); err != nil {
+				a.Code = app.CodeInnerError
+				return
+			}
+		} else {
+			handler.TryQueryPay(order)
+		}
+		// Reload by primary key: Get(order) also filters on its stale status and timestamps.
+		refreshed := &common.OrderPay{}
+		if err := db.Mysql().C().First(refreshed, order.ID).Error; err != nil {
+			a.Code = app.CodeInnerError
+			return
+		}
+		order = refreshed
 	}
 	a.Data = &PayInQueryResp{
 		MerchantID:      req.MerchantID,
