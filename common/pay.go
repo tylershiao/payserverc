@@ -31,6 +31,10 @@ const (
 	WithdrawTypeAll
 )
 
+const (
+	OrderPayDropRate = 5 // 千分之5
+)
+
 type PayReq struct {
 	MchId    int
 	OrderID  string  // 平台订单号

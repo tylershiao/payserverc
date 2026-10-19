@@ -3,6 +3,7 @@ package call
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -47,13 +48,13 @@ func callbackDB(t *testing.T) sqlmock.Sqlmock {
 
 func callbackOrder() *common.OrderPay {
 	return &common.OrderPay{ID: 7, MID: 12, OrderID: "platform-7", MOrderID: "merchant-7", APIOrderID: "upstream-7",
-		Status: common.StatusROrderCreate, Amount: 100, Fee: 2, IsDropped: true}
+		Status: common.StatusROrderCreate, Amount: 100, Fee: 2}
 }
 
 func expectCurrentOrder(mock sqlmock.Sqlmock, order *common.OrderPay) {
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT * FROM `order_pay` WHERE `order_pay`.`id` = ? AND `order_pay`.`deleted_at` IS NULL ORDER BY `order_pay`.`id` LIMIT ? FOR UPDATE")).
-		WithArgs(order.ID, 1).WillReturnRows(sqlmock.NewRows([]string{"id", "mid", "order_id", "m_order_id", "amount", "fee", "status", "realtime_settle", "callback_url"}).
-		AddRow(order.ID, order.MID, order.OrderID, order.MOrderID, order.Amount, order.Fee, order.Status, order.RealTimeSettle, order.CallbackURL))
+		WithArgs(order.ID, 1).WillReturnRows(sqlmock.NewRows([]string{"id", "mid", "order_id", "m_order_id", "amount", "fee", "status", "is_dropped", "realtime_settle", "callback_url"}).
+		AddRow(order.ID, order.MID, order.OrderID, order.MOrderID, order.Amount, order.Fee, order.Status, order.IsDropped, order.RealTimeSettle, order.CallbackURL))
 }
 
 func expectOrderUpdate(mock sqlmock.Sqlmock, order *common.OrderPay) *sqlmock.ExpectedExec {
@@ -117,6 +118,7 @@ func TestPayCallbackCreditsOnceAndNotifiesAfterCommit(t *testing.T) {
 			// Accounting and notification must use the locked database order, even with stale input fields.
 			order.Amount, order.Fee, order.MID = 1000, 100, 13
 			order.RealTimeSettle = !realTime
+			order.IsDropped = true
 			if err := PayCallback(order, true); err != nil {
 				t.Fatal(err)
 			}
@@ -207,7 +209,7 @@ func TestPayCallbackIgnoresStaleFailureAfterSuccess(t *testing.T) {
 	stale := callbackOrder()
 	current := *stale
 	current.Status = common.StatusROrderFinish
-	// The failure callback loaded Create before a dropped-order query committed Finish.
+	// The failure callback loaded Create before an earlier success committed Finish.
 	mock.ExpectBegin()
 	expectCurrentOrder(mock, &current)
 	mock.ExpectCommit()
@@ -220,5 +222,182 @@ func TestPayCallbackIgnoresStaleFailureAfterSuccess(t *testing.T) {
 	mock.ExpectCommit()
 	if err := PayCallback(stale, true); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func callbackNotifications(t *testing.T) (string, <-chan common.PayCallbackReq) {
+	t.Helper()
+	notifications := make(chan common.PayCallbackReq, 2)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req common.PayCallbackReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode merchant notification: %v", err)
+		}
+		notifications <- req
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(server.Close)
+	return server.URL, notifications
+}
+
+func assertNoCallbackNotification(t *testing.T, notifications <-chan common.PayCallbackReq) {
+	t.Helper()
+	select {
+	case req := <-notifications:
+		t.Fatalf("unexpected merchant notification: %+v", req)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func expectDropUpdate(mock sqlmock.Sqlmock, order *common.OrderPay) *sqlmock.ExpectedExec {
+	// UpdateColumn must only change the drop flag, without changing status or timestamps.
+	return mock.ExpectExec(regexp.QuoteMeta("UPDATE `order_pay` SET `is_dropped`=? WHERE id = ? AND `order_pay`.`deleted_at` IS NULL")).
+		WithArgs(true, order.ID)
+}
+
+func TestPayCallbackUpstreamDropProbabilityBoundaries(t *testing.T) {
+	for _, value := range []int{0, 4, 5, 999} {
+		t.Run(fmt.Sprintf("draw_%d", value), func(t *testing.T) {
+			mock := callbackDB(t)
+			order := callbackOrder()
+			var notifications <-chan common.PayCallbackReq
+			order.CallbackURL, notifications = callbackNotifications(t)
+			drop := value < 5
+			mock.ExpectBegin()
+			expectCurrentOrder(mock, order)
+			if drop {
+				expectDropUpdate(mock, order).WillReturnResult(sqlmock.NewResult(0, 1))
+			} else {
+				expectOrderUpdate(mock, order).WillReturnResult(sqlmock.NewResult(0, 1))
+				expectMerchant(mock)
+				expectBalance(mock, false).WillReturnResult(sqlmock.NewResult(0, 1))
+				expectFund(mock, false).WillReturnResult(sqlmock.NewResult(1, 1))
+			}
+			mock.ExpectCommit()
+			draws := 0
+			processed, err := payCallback(order, true, func(n int) int {
+				draws++
+				if n != 1000 {
+					t.Fatalf("expected 1000 possible outcomes, got %d", n)
+				}
+				return value
+			})
+			if err != nil || processed != !drop || draws != 1 {
+				t.Fatalf("unexpected callback result: processed=%t err=%v draws=%d", processed, err, draws)
+			}
+			if drop {
+				assertNoCallbackNotification(t, notifications)
+				return
+			}
+			select {
+			case req := <-notifications:
+				if req.OrderStatus != common.StatusROrderFinish || req.OrderAmount != 10000 {
+					t.Fatalf("invalid normal success notification: %+v", req)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("missing normal success notification")
+			}
+		})
+	}
+}
+
+func TestPayCallbackIgnoresPersistedDroppedSuccess(t *testing.T) {
+	mock := callbackDB(t)
+	stale := callbackOrder()
+	var notifications <-chan common.PayCallbackReq
+	stale.CallbackURL, notifications = callbackNotifications(t)
+	current := *stale
+	current.IsDropped = true
+	mock.ExpectBegin()
+	expectCurrentOrder(mock, &current)
+	mock.ExpectCommit()
+	processed, err := payCallback(stale, true, func(int) int {
+		t.Fatal("already dropped success must not draw again")
+		return 999
+	})
+	if err != nil || processed {
+		t.Fatalf("unexpected dropped callback result: processed=%t err=%v", processed, err)
+	}
+	// A query that loaded the order before it was dropped must not settle it either.
+	mock.ExpectBegin()
+	expectCurrentOrder(mock, &current)
+	mock.ExpectCommit()
+	if err := PayCallback(stale, true); err != nil {
+		t.Fatal(err)
+	}
+	assertNoCallbackNotification(t, notifications)
+}
+
+func TestPayCallbackFinishedDuplicateDoesNotDraw(t *testing.T) {
+	mock := callbackDB(t)
+	stale := callbackOrder()
+	current := *stale
+	current.Status = common.StatusROrderFinish
+	mock.ExpectBegin()
+	expectCurrentOrder(mock, &current)
+	mock.ExpectCommit()
+	processed, err := payCallback(stale, true, func(int) int {
+		t.Fatal("completed order must not be randomly dropped by a duplicate callback")
+		return 0
+	})
+	if err != nil || processed {
+		t.Fatalf("unexpected duplicate result: processed=%t err=%v", processed, err)
+	}
+}
+
+func TestPayCallbackDroppedFailureKeepsOriginalBehavior(t *testing.T) {
+	mock := callbackDB(t)
+	order := callbackOrder()
+	order.IsDropped = true
+	var notifications <-chan common.PayCallbackReq
+	order.CallbackURL, notifications = callbackNotifications(t)
+	mock.ExpectBegin()
+	expectCurrentOrder(mock, order)
+	mock.ExpectExec(regexp.QuoteMeta("UPDATE `order_pay` SET `api_order_id`=?,`callback_time`=?,`status`=?,`updated_at`=? WHERE (id = ? and status <> ?) AND `order_pay`.`deleted_at` IS NULL")).
+		WithArgs(order.APIOrderID, sqlmock.AnyArg(), common.StatusROrderFail, sqlmock.AnyArg(), order.ID, common.StatusROrderFail).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	expectMerchant(mock)
+	mock.ExpectCommit()
+	processed, err := payCallback(order, false, func(int) int {
+		t.Fatal("failure callback must not draw for a drop")
+		return 0
+	})
+	if err != nil || !processed {
+		t.Fatalf("unexpected failure callback result: processed=%t err=%v", processed, err)
+	}
+	select {
+	case req := <-notifications:
+		if req.OrderStatus != common.StatusROrderFail {
+			t.Fatalf("invalid failure notification: %+v", req)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("missing original failure notification")
+	}
+}
+
+func TestPayCallbackDropPersistenceFailureDoesNotSettleOrNotify(t *testing.T) {
+	for _, stage := range []string{"mark", "commit"} {
+		t.Run(stage, func(t *testing.T) {
+			mock := callbackDB(t)
+			order := callbackOrder()
+			var notifications <-chan common.PayCallbackReq
+			order.CallbackURL, notifications = callbackNotifications(t)
+			failure := errors.New("injected drop " + stage + " failure")
+			mock.ExpectBegin()
+			expectCurrentOrder(mock, order)
+			mark := expectDropUpdate(mock, order)
+			if stage == "mark" {
+				mark.WillReturnError(failure)
+				mock.ExpectRollback()
+			} else {
+				mark.WillReturnResult(sqlmock.NewResult(0, 1))
+				mock.ExpectCommit().WillReturnError(failure)
+			}
+			processed, err := payCallback(order, true, func(int) int { return 0 })
+			if !errors.Is(err, failure) || processed {
+				t.Fatalf("unexpected persistence failure result: processed=%t err=%v", processed, err)
+			}
+			assertNoCallbackNotification(t, notifications)
+		})
 	}
 }

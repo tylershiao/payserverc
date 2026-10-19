@@ -78,8 +78,12 @@ func (b *Base) PayCallback(c *gin.Context) {
 	if or.APIOrderID == "" {
 		or.APIOrderID = b.CallbackResp.APIOrderID
 	}
-	if err := call.PayCallback(or, success); err != nil {
+	processed, err := call.PayCallbackFromUpstream(or, success)
+	if err != nil {
 		b.CallbackResp.Msg = "callback fail"
+		return
+	}
+	if !processed {
 		return
 	}
 	if success && (time.Now().Unix()-or.CreatedAt.Unix() <= 300) { // 5分钟内成功的单才增加权重

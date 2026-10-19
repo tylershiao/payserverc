@@ -23,6 +23,17 @@ var (
 )
 
 func PayCallback(order *common.OrderPay, success bool) error {
+	_, err := payCallback(order, success, nil)
+	return err
+}
+
+// PayCallbackFromUpstream applies the 5/1000 drop rate to successful upstream callbacks.
+// It reports whether normal callback processing completed.
+func PayCallbackFromUpstream(order *common.OrderPay, success bool) (bool, error) {
+	return payCallback(order, success, rand.Intn)
+}
+
+func payCallback(order *common.OrderPay, success bool, draw func(int) int) (bool, error) {
 	log.Debug("PayCallback:%+v,success:%v", order, success)
 	update := map[string]interface{}{}
 	status := common.StatusROrderCreate
@@ -41,9 +52,17 @@ func PayCallback(order *common.OrderPay, success bool) error {
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(current, order.ID).Error; err != nil {
 			return err
 		}
+		// Recheck under the row lock so concurrent callbacks and queries cannot settle a dropped order.
+		if success && current.IsDropped {
+			return nil
+		}
 		// An earlier callback may have read a pending order before a successful payment committed.
 		if current.Status == status || (!success && current.Status != order.Status) {
 			return nil
+		}
+		if success && draw != nil && draw(1000) < common.OrderPayDropRate {
+			// UpdateColumn deliberately leaves status, callback_time and updated_at untouched.
+			return tx.Model(&common.OrderPay{}).Where("id = ?", current.ID).UpdateColumn("is_dropped", true).Error
 		}
 		// 更新订单状态
 		res := tx.Model(&common.OrderPay{}).Where("id = ? and status <> ?", order.ID, status).Updates(update)
@@ -107,14 +126,14 @@ func PayCallback(order *common.OrderPay, success bool) error {
 		return nil
 	})
 	if err != nil || settledOrder == nil {
-		return err
+		return false, err
 	}
 
 	// Start merchant notifications only after the order and accounting transaction commits.
 	merchat := GetConfigMerchatsByID(settledOrder.MID)
 	if merchat == nil {
 		log.Error("invalid merchat:%d", settledOrder.MID)
-		return nil
+		return true, nil
 	}
 	send := &common.PayCallbackReq{MerchantID: settledOrder.MID, PlatformOrderID: settledOrder.OrderID, MerchantOrderID: settledOrder.MOrderID,
 		OrderAmount: decimal.NewFromFloat(settledOrder.Amount).Shift(2).IntPart(), OrderStatus: status, StatusMessage: settledOrder.Message, Metadata: settledOrder.Extra}
@@ -123,7 +142,7 @@ func PayCallback(order *common.OrderPay, success bool) error {
 	IndexTryWithParam(NotifyInerval, func() error {
 		return util.HttpPostWithoutRet(callbackURL, send, nil)
 	})
-	return nil
+	return true, nil
 
 	// var err error
 	// tx := db.Mysql().Begin()
