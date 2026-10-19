@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -16,6 +17,7 @@ import (
 	"server/modules/pay/base"
 	"server/modules/pay/values"
 	"server/sign"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -53,7 +55,6 @@ func queryDB(t *testing.T) sqlmock.Sqlmock {
 }
 
 const orderLookupSQL = "SELECT * FROM `order_pay` WHERE (`order_pay`.`m_order_id` = ? AND `order_pay`.`mid` = ?) AND `order_pay`.`deleted_at` IS NULL ORDER BY `order_pay`.`id` LIMIT ?"
-const orderReloadSQL = "SELECT * FROM `order_pay` WHERE `order_pay`.`id` = ? AND `order_pay`.`deleted_at` IS NULL ORDER BY `order_pay`.`id` LIMIT ?"
 
 func queryOrderRows(status int, dropped bool, callbackURL string) *sqlmock.Rows {
 	oldTime := time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC)
@@ -90,86 +91,36 @@ func queryRequest(t *testing.T, mid int, signature string) (int, *PayInQueryResp
 	return response.Code, response.Data
 }
 
-func expectQueryPayment(mock sqlmock.Sqlmock, status int, dropped bool, callbackURL string) {
-	mock.ExpectBegin()
-	mock.ExpectQuery(regexp.QuoteMeta(orderReloadSQL+" FOR UPDATE")).WithArgs(7, 1).
-		WillReturnRows(queryOrderRows(status, dropped, callbackURL))
-	mock.ExpectExec(regexp.QuoteMeta("UPDATE `order_pay` SET `api_order_id`=?,`callback_time`=?,`status`=?,`updated_at`=? WHERE (id = ? and status <> ?) AND `order_pay`.`deleted_at` IS NULL")).
-		WithArgs("upstream-7", sqlmock.AnyArg(), common.StatusROrderFinish, sqlmock.AnyArg(), 7, common.StatusROrderFinish).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectQuery("SELECT \\* FROM `merchats` WHERE mid = \\? ORDER BY `merchats`.`id` LIMIT \\? FOR UPDATE").
-		WithArgs(12, 1).WillReturnRows(sqlmock.NewRows([]string{"id", "mid", "balance_settle"}).AddRow(3, 12, 300))
-	mock.ExpectExec(regexp.QuoteMeta("UPDATE `merchats` SET `balance_settle`=balance_settle + 98.00,`updated_at`=? WHERE id = ?")).
-		WithArgs(sqlmock.AnyArg(), 3).WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec("INSERT INTO `fund_details`").WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
-}
-
-func TestPayInQueryRoutesAndReturnsRefreshedStatus(t *testing.T) {
+func TestPayInQueryReturnsStoredStatusWithoutSideEffects(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	for _, tc := range []struct {
-		name        string
-		status      int
-		dropped     bool
-		queryStatus int
-		queries     int
-		finish      bool
-	}{
-		{"already_successful", common.StatusROrderFinish, true, base.QueryStatusUnknown, 0, false},
-		{"dropped_pending", common.StatusROrderCreate, true, base.QueryStatusUnknown, 0, true},
-		{"dropped_failed", common.StatusROrderFail, true, base.QueryStatusUnknown, 0, true},
-		{"upstream_successful", common.StatusROrderCreate, false, base.QueryStatusOrderSuccess, 1, true},
-		{"upstream_pending", common.StatusROrderCreate, false, base.QueryStatusUnknown, 1, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			mock := queryDB(t)
-			notifications := make(chan struct{}, 1)
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				notifications <- struct{}{}
-				w.WriteHeader(http.StatusOK)
-			}))
-			defer server.Close()
-			queries := 0
-			previousChannel := allpay.All.TKPay
-			allpay.All.TKPay = func(b *base.Base) {
-				b.Sub = &struct{ base.Sub }{}
-				b.SubReq = func() error {
-					queries++
-					if b.QueryPayReq.OrderID != "platform-7" || b.QueryPayReq.APIOrderID != "upstream-7" {
-						t.Errorf("incorrect upstream query: %+v", b.QueryPayReq)
-					}
-					b.QueryPayResp.Status = tc.queryStatus
-					return nil
+	var notifications, queries atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		notifications.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	previousChannel := allpay.All.TKPay
+	allpay.All.TKPay = func(b *base.Base) {
+		queries.Add(1)
+	}
+	defer func() { allpay.All.TKPay = previousChannel }()
+	for status := common.StatusROrderWaitting; status < common.StatusROrderAll; status++ {
+		for _, dropped := range []bool{false, true} {
+			t.Run(fmt.Sprintf("status_%d/dropped_%t", status, dropped), func(t *testing.T) {
+				mock := queryDB(t)
+				// Only the merchant-scoped read is allowed: transactions, writes and extra reads fail the test.
+				mock.ExpectQuery(regexp.QuoteMeta(orderLookupSQL)).WithArgs("merchant-7", 12, 1).
+					WillReturnRows(queryOrderRows(status, dropped, server.URL))
+				code, data := queryRequest(t, 12, "")
+				if code != app.CodeOK || data == nil || data.OrderStatus != status || data.OrderAmount != 10000 ||
+					data.PlatformOrderID != "platform-7" || data.MerchantOrderID != "merchant-7" || data.MerchantID != 12 {
+					t.Fatalf("unexpected query response: code=%d data=%+v", code, data)
 				}
-			}
-			defer func() { allpay.All.TKPay = previousChannel }()
-			mock.ExpectQuery(regexp.QuoteMeta(orderLookupSQL)).WithArgs("merchant-7", 12, 1).
-				WillReturnRows(queryOrderRows(tc.status, tc.dropped, server.URL))
-			wantStatus := tc.status
-			if tc.finish {
-				expectQueryPayment(mock, tc.status, tc.dropped, server.URL)
-				wantStatus = common.StatusROrderFinish
-			}
-			if tc.status != common.StatusROrderFinish {
-				// Exact primary-key SQL prevents stale status/timestamp predicates from hiding the updated order.
-				mock.ExpectQuery(regexp.QuoteMeta(orderReloadSQL)).WithArgs(7, 1).
-					WillReturnRows(queryOrderRows(wantStatus, tc.dropped, server.URL))
-			}
-			code, data := queryRequest(t, 12, "")
-			if code != app.CodeOK || data == nil || data.OrderStatus != wantStatus || data.OrderAmount != 10000 || data.PlatformOrderID != "platform-7" {
-				t.Fatalf("unexpected query response: code=%d data=%+v", code, data)
-			}
-			if queries != tc.queries {
-				t.Fatalf("upstream queries=%d, want %d", queries, tc.queries)
-			}
-			if tc.finish {
-				select {
-				case <-notifications:
-				case <-time.After(time.Second):
-					t.Fatal("missing merchant notification")
+				if queries.Load() != 0 || notifications.Load() != 0 {
+					t.Fatalf("query produced side effects: upstream queries=%d merchant notifications=%d", queries.Load(), notifications.Load())
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
@@ -191,16 +142,11 @@ func TestPayInQueryRejectsInvalidSignatureAndScopesMerchant(t *testing.T) {
 	})
 }
 
-func TestPayInQueryDoesNotReportSuccessWhenCompletionFails(t *testing.T) {
+func TestPayInQueryReportsDatabaseReadFailure(t *testing.T) {
 	mock := queryDB(t)
 	mock.ExpectQuery(regexp.QuoteMeta(orderLookupSQL)).WithArgs("merchant-7", 12, 1).
-		WillReturnRows(queryOrderRows(common.StatusROrderCreate, true, ""))
-	mock.ExpectBegin()
-	mock.ExpectQuery(regexp.QuoteMeta(orderReloadSQL+" FOR UPDATE")).WithArgs(7, 1).
-		WillReturnRows(queryOrderRows(common.StatusROrderCreate, true, ""))
-	mock.ExpectExec("UPDATE `order_pay`").WillReturnError(errors.New("injected order update failure"))
-	mock.ExpectRollback()
+		WillReturnError(errors.New("injected database read failure"))
 	if code, data := queryRequest(t, 12, ""); code != app.CodeInnerError || data != nil {
-		t.Fatalf("reported unsuccessful completion as success: code=%d data=%+v", code, data)
+		t.Fatalf("unexpected database error response: code=%d data=%+v", code, data)
 	}
 }

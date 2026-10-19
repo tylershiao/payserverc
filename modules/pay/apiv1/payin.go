@@ -226,23 +226,6 @@ func PayInQuery(c *gin.Context) {
 		a.Code = app.CodeInnerError
 		return
 	}
-	if order.Status != common.StatusROrderFinish {
-		if order.IsDropped {
-			if err := call.PayCallback(order, true); err != nil {
-				a.Code = app.CodeInnerError
-				return
-			}
-		} else {
-			handler.TryQueryPay(order)
-		}
-		// Reload by primary key: Get(order) also filters on its stale status and timestamps.
-		refreshed := &common.OrderPay{}
-		if err := db.Mysql().C().First(refreshed, order.ID).Error; err != nil {
-			a.Code = app.CodeInnerError
-			return
-		}
-		order = refreshed
-	}
 	a.Data = &PayInQueryResp{
 		MerchantID:      req.MerchantID,
 		PlatformOrderID: order.OrderID,
